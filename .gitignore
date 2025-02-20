@@ -1,0 +1,7 @@
+build*/
+.ccls-cache/
+.cache/
+*.sw*
+twister-*
+.vscode
+.zed
