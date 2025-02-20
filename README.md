@@ -1,5 +1,7 @@
 # pokirobot_monorepo
 Repo contenant toutes les fichiers nécessaires pour réaliser le robot pokibot de la coupe de france de robotique.
+ - brain_app: le soft central du robot, héberge la "stratégie".
+ - legs_app: le soft s'occupant du control moteur.
 
 # SETUP
 
