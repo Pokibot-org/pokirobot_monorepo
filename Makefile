@@ -8,6 +8,9 @@ help: # show help for each of the Makefile recipes.
 build: # build target
 	west build -b mini_stm32h743 app --build-dir build_target
 
+build-debug: # build target with debug
+	west build -b mini_stm32h743 app --build-dir build_target -- -DOVERLAY_CONFIG=debug.conf
+
 rebuild: # rebuild target
 	west build -b mini_stm32h743 app --build-dir build_target --pristine
 

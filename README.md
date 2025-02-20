@@ -1,16 +1,16 @@
-# pokirobot_soft
+# pokirobot_brain_soft
 Soft du robot pokibot utilisé pour la coupe de france de robotique.
 
 ```sh
 # create a new west workspace and pull the firmware
-west init -m https://github.com/Pokibot-org/pokirobot_soft west-workspace
-cd west-workspace/pokirobot_soft
+west init -m https://github.com/Pokibot-org/pokirobot_brain_soft west-workspace
+cd west-workspace/pokirobot_brain_soft
 
 # pull Zephyr upstream repository and modules (may take a while)
 west update
 ```
 
-cd west-workspace/pokirobot_soft
+cd west-workspace/pokirobot_brain_soft
 
 ```sh
 west-workspace/                     # contains .west/config
@@ -36,23 +36,23 @@ If you already have a west workspace set up, you can also re-use it to avoid hav
 cd your-zephyr-workspace
 
 # pull the firmware
-git clone https://github.com/Pokibot-org/pokirobot_soft
+git clone https://github.com/Pokibot-org/pokirobot_brain_soft
 
 # re-configure and update the workspace
 # (to be done each time you switch between applications in same workspace)
-west config manifest.path pokirobot_soft
+west config manifest.path pokirobot_brain_soft
 west update
 ```
 # BUILD
 
-Inside the app directory (pokirobot_soft):
+Inside the app directory (pokirobot_brain_soft):
 ```sh
-west build -b nucleo_f446re app -- -DOVERLAY_CONFIG=debug.conf
+make build-debug
 ```
 
 Or in release mode:
 ```sh
-west build -b nucleo_f446re app
+make build
 ```
 
 ## Sanity checks
