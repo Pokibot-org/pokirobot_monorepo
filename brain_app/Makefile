@@ -1,21 +1,18 @@
 .PHONY: help
 
-SRC_FILES := $(shell find app/src app/lib -name '*.c' -o -name '*.h')
+SRC_FILES := $(shell find ./src -name '*.c' -o -name '*.h')
 
 help: # show help for each of the Makefile recipes.
 	@grep -E '^[a-zA-Z0-9 -]+:.*#'  Makefile | sort | while read -r l; do printf "\033[1;32m$$(echo $$l | cut -f 1 -d':')\033[00m:$$(echo $$l | cut -f 2- -d'#')\n"; done
 
 build: # build target
-	west build -b mini_stm32h743 app --build-dir build_target
-
-build-debug: # build target with debug
-	west build -b mini_stm32h743 app --build-dir build_target -- -DOVERLAY_CONFIG=debug.conf
+	west build -b mini_stm32h743 .
 
 rebuild: # rebuild target
-	west build -b mini_stm32h743 app --build-dir build_target --pristine
+	west build -b mini_stm32h743 . --pristine
 
 build-pc-app: # build strat pc app
-	west build -b native_posix app --build-dir build_pc
+	west build -b native_posix . --build-dir build_pc
 
 run-pc-app: # run strat pc app
 	./build_pc/zephyr/zephyr.elf
