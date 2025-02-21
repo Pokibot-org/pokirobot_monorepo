@@ -1,0 +1,5 @@
+menu "Pokibot libraries"
+
+rsource "lidar/Kconfig"
+
+endmenu

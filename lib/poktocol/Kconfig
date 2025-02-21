@@ -1,0 +1,4 @@
+config POKTOCOL
+	bool "Enable poktocol library"
+	help
+	  Enable poktocol

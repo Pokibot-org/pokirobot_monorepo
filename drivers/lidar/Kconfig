@@ -1,0 +1,13 @@
+config LIDAR
+	bool "Enable lidar drivers"
+	help
+	  Enable lidar drivers
+
+if LIDAR
+
+config LIDAR_FHL_LD19
+    bool "Enable fhl-ld19 drivers"
+    default y
+   	depends on DT_HAS_ZEPHYR_FHL_LD19_ENABLED
+
+endif

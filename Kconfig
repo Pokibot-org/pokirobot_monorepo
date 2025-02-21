@@ -1,2 +1,2 @@
-# nothing now, will include rsource
-# rsource "drivers/Kconfig"
+rsource "drivers/Kconfig"
+rsource "lib/Kconfig"

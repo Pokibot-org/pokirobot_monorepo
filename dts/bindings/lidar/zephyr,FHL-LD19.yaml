@@ -1,0 +1,11 @@
+description: |
+  FHL-LD19 lidar driver
+  Example definition in devicetree:
+
+    lidar {
+        compatible = "zephyr,FHL-LD19";
+    };
+
+compatible: "zephyr,FHL-LD19"
+
+include: base.yaml
