@@ -1,4 +1,4 @@
-.PHONY: help
+.PHONY: help build test
 
 SRC_FILES := $(shell find ./src -name '*.c' -o -name '*.h')
 
