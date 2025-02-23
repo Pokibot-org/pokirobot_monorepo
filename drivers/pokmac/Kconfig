@@ -1,0 +1,16 @@
+config POKMAC
+    bool "Enable pokmac drivers"
+        default y
+    depends on DT_HAS_ZEPHYR_POKMAC_ENABLED
+    select UART_INTERRUPT_DRIVEN
+    select CRC
+        help
+        Enable pokmac drivers
+
+config POKMAC_INIT_PRIORITY
+    int "Pokmac init priority"
+	default 60
+
+config POKMAC_BUFFER_SIZE
+    int "Pokmac buffer size"
+    default 128

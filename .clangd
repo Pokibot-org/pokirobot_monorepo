@@ -2,3 +2,4 @@ CompileFlags:
   Add:
     - "--include-directory=/include"
     - "--include-directory=../zephyr/include"
+    - "--header-insertion=never"
