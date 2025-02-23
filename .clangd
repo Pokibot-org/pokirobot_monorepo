@@ -1,0 +1,4 @@
+CompileFlags:
+  Add:
+    - "--include-directory=/include"
+    - "--include-directory=../zephyr/include"
