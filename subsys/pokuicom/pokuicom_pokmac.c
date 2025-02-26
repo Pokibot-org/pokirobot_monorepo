@@ -1,6 +1,6 @@
 #include "pokibot/drivers/pokmac.h"
 #include "pokibot/lib/poktocol.h"
-#include "pokuicom.h"
+#include "pokibot/pokuicom.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <zephyr/kernel.h>
@@ -8,7 +8,7 @@
 
 LOG_MODULE_REGISTER(pokuicom);
 
-static const struct device *pokmac_dev = DEVICE_DT_GET(DT_NODELABEL(pokmac_ui));
+static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_pokuicom));
 
 bool match_started = false;
 bool has_color_info = false;

@@ -1,0 +1,22 @@
+menuconfig POKUICOM
+	bool "POKUICOM subsystem"
+
+if POKUICOM
+
+DT_CHOSEN_POKIBOT_POKUICOM := pokibot,pokuicom
+choice POKUICOM_IMPL
+	prompt "POKUICOM Implementation"
+	default POKUICOM_IMPL_SIMULATED if ARCH_POSIX
+	default POKUICOM_IMPL_POKMAC if $(dt_chosen_enabled,$(DT_CHOSEN_POKIBOT_POKUICOM))
+
+config POKUICOM_IMPL_POKMAC
+	bool "Pokuicom on hardware implementation"
+	select POKTOCOL
+
+config POKUICOM_IMPL_SIMULATED
+	bool "Simulated implementation"
+	select MQTT_SIM_MESSAGER
+
+endchoice
+
+endif # POKUICOM

@@ -1,3 +1,9 @@
+/ {
+   	chosen {
+		pokibot,pokuicom = &pokmac_ui;
+	};
+};
+
 &usart1 {
     status = "okay";
    	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
