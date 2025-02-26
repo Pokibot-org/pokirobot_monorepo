@@ -1,7 +1,7 @@
 config POKMAC
     bool "Enable pokmac drivers"
         default y
-    depends on DT_HAS_ZEPHYR_POKMAC_ENABLED
+    depends on DT_HAS_POKIBOT_POKMAC_ENABLED
     select UART_INTERRUPT_DRIVEN
     select CRC
         help

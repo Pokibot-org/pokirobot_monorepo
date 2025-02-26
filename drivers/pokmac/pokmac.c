@@ -1,6 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
-#define DT_DRV_COMPAT zephyr_pokmac
+#define DT_DRV_COMPAT pokibot_pokmac
 #include <pokibot/drivers/pokmac.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/crc.h>
