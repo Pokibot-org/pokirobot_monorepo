@@ -5,6 +5,8 @@ manifest:
   remotes:
     - name: zephyrproject-rtos
       url-base: https://github.com/zephyrproject-rtos
+    - name: pokibot-github
+      url-base: https://github.com/Pokibot-org
 
   projects:
     - name: zephyr
@@ -18,3 +20,7 @@ manifest:
           - cmsis-dsp
           - hal_stm32
           - zcbor
+    - name: paho-mqtt-c
+      repo-path: paho.mqtt.c
+      revision: b9678577ea7fc46055eecb2478cb8d26bfa18de9
+      path: modules/lib/paho-mqtt-c

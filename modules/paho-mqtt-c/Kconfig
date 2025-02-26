@@ -1,0 +1,13 @@
+#
+# Copyright (c) 2019 Manivannan Sadhasivam
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+config ZEPHYR_PAHO_MQTT_C_MODULE
+	bool
+
+config NATIVE_MQTT
+	bool "Native mqtt support using paho mqtt c"
+	help
+	  This option enable the support for paho mqtt library
