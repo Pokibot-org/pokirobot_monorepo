@@ -21,6 +21,7 @@ manifest:
           - hal_stm32
           - zcbor
     - name: paho-mqtt-c
+      remote: pokibot-github
       repo-path: paho.mqtt.c
       revision: b9678577ea7fc46055eecb2478cb8d26bfa18de9
       path: modules/lib/paho-mqtt-c
