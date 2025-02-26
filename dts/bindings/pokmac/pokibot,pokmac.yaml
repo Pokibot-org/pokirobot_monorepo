@@ -2,6 +2,6 @@ description: |
   Pokmac driver
   Has to be on a uart node
 
-compatible: "zephyr,pokmac"
+compatible: "pokibot,pokmac"
 
 include: uart-device.yaml

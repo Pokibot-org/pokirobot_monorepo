@@ -4,7 +4,7 @@
 	pinctrl-names = "default";
 	current-speed = <921600>;
     pokmac_ui: pokmac_ui {
-        compatible = "zephyr,pokmac";
+        compatible = "pokibot,pokmac";
         status = "okay";
     };
 };
@@ -15,7 +15,7 @@
 	pinctrl-names = "default";
 	current-speed = <921600>;
     pokmac_legs: pokmac_legs {
-        compatible = "zephyr,pokmac";
+        compatible = "pokibot,pokmac";
         status = "okay";
     };
 };
