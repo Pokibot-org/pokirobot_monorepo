@@ -1,0 +1,6 @@
+board:
+  name: pokimotor
+  full_name: Pokimotor
+  vendor: pokibot
+  socs:
+    - name: stm32g474xx
