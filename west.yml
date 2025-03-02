@@ -23,5 +23,5 @@ manifest:
     - name: paho-mqtt-c
       remote: pokibot-github
       repo-path: paho.mqtt.c
-      revision: b9678577ea7fc46055eecb2478cb8d26bfa18de9
+      revision: e7abcfc795f622ca38d131bae8165852c4994011
       path: modules/lib/paho-mqtt-c

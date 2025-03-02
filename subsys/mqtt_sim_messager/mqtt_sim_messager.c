@@ -1,6 +1,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
-#include <zephyr/mqtt_sim_messager/msm.h>
+#include <pokibot/mqtt_sim_messager/msm.h>
 #include <zephyr/logging/log.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +13,7 @@
 LOG_MODULE_REGISTER(msm, CONFIG_MQTT_SIM_MESSAGER_LOG_LEVEL);
 
 
-#define ADDRESS     "tcp://127.0.0.1:1883" 
+#define ADDRESS     "tcp://127.0.0.1:1883"
 #define QOS         0
 #define TIMEOUT     1000L
 #define ROOT_TOPIC "msm/"
@@ -66,7 +66,7 @@ void msm_topic_register(struct msm_topic *topic)
 {
     char full_topic[128];
     snprintf(full_topic, sizeof(full_topic), "%s%s", base_topic, topic->name);
-    
+
     LOG_DBG("REG %s", full_topic);
     MQTTClient_subscribe(client, full_topic, QOS);
 	sys_slist_append(&topic_list, &topic->_node);
@@ -110,7 +110,7 @@ int msm_init(void)
     static MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
     conn_opts.cleansession = 1;
     conn_opts.keepAliveInterval = 20;
-    
+
     // Define the last will message and topic
     static char lw_topic[128];
     snprintf(lw_topic, sizeof(lw_topic), "%s%s", base_topic, "status");
@@ -120,7 +120,7 @@ int msm_init(void)
     conn_opts.will->qos = 1;
     conn_opts.will->retained = 0;
     conn_opts.will->topicName = lw_topic;
- 
+
     if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
     {
         LOG_INF("Failed to connect, return code %d", rc);
