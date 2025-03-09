@@ -67,7 +67,7 @@ class SimNode:
         pass
 
     def start_simulation(self):
-        t = threading.Thread(target=self._sim_task)
+        t = threading.Thread(target=self._sim_task, daemon=True)
         t.start()
 
 def on_message(client, userdata, message):

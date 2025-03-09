@@ -1,10 +1,8 @@
 #ifndef POKTOCOL_H
 #define POKTOCOL_H
-#include "stddef.h"
-#include "stdint.h"
-#include "stdbool.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 enum poktocol_commands_types {
     POKTOCOL_CMD_TYPE_WRITE,

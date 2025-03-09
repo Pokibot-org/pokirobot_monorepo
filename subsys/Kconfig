@@ -8,5 +8,6 @@ menu "Sub Systems and OS Services"
 
 rsource "mqtt_sim_messager/Kconfig"
 rsource "pokuicom/Kconfig"
+rsource "poklegscom/Kconfig"
 
 endmenu

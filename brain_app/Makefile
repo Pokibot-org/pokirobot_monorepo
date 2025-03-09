@@ -12,10 +12,10 @@ rebuild: # rebuild target
 	west build -b mini_stm32h743 . --pristine --build-dir ../build
 
 build-pc-app: # build strat pc app
-	west build -b native_sim_64 . --build-dir ../build
+	west build -b native_sim/native/64 . --build-dir ../build
 
 rebuild-pc-app: # build strat pc app
-	west build -b native_sim_64 . --pristine --build-dir ../build
+	west build -b native_sim/native/64 . --pristine --build-dir ../build
 
 run-pc-app: # run strat pc app
 	../build/zephyr/zephyr.exe

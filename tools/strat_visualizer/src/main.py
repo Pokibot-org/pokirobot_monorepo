@@ -5,6 +5,7 @@ import threading
 import json
 import math
 from msm import MqttSimMessengerServer, SimNode
+import time
 import logging
 logger = logging.getLogger("strat_visu")
 
@@ -35,8 +36,8 @@ def draw_robot(screen, board, robot):
         (130, 30, 30),
         on_board_pos,
         (
-            on_board_pos[0] + on_board_radius * math.cos(robot.dir),
-            on_board_pos[1] + on_board_radius * math.sin(robot.dir + math.pi),
+            on_board_pos[0] + on_board_radius * math.cos(robot.pos[2]),
+            on_board_pos[1] + on_board_radius * math.sin(robot.pos[2] + math.pi),
         ),
         width=4,
     )
@@ -54,11 +55,22 @@ class PokibotSimNode(SimNode):
     def __init__(self, parent, id) -> None:
         super().__init__(parent, id, "")
         self.radius = 190
-        self.pos = [0, 0]
-        self.dir = 0
+        self.pos = [0, 0, 0]
         self.team = 0
+        self.wp_index = 0
+        self.wps = []
+        self.motor_break = False
         self.add_child(SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom))
+        self.poklegscom = SimNodeWithClbk(self, 0, "poklegscom", self.process_poklegscom)
+        self.add_child(self.poklegscom)
+
+        self.start_simulation()
         print(self.childs)
+
+    def _sim_task(self):
+        while 1:
+            time.sleep(0.1)
+            self.poklegscom.send("pos", f"{self.pos[0]} {self.pos[1]} {self.pos[2]}")
 
     def process_pokuicom(self, parent: SimNode, topic, payload):
         # types: SOCRE TEAM MATCHSTERTED
@@ -74,6 +86,17 @@ class PokibotSimNode(SimNode):
                         parent.send("match", f"{1}")
             case "score":
                 logger.info(f"New score: {payload["value"]}")
+
+    def process_poklegscom(self, parent: SimNode, topic, payload):
+        # types: SOCRE TEAM MATCHSTERTED
+        payload = json.loads(payload)
+        match topic:
+            case "set_pos":
+                self.pos = [payload["x"], payload["y"], payload["a"]]
+            case "set_waypoints":
+                logger.info(f"set wps {payload}")
+            case "set_break":
+                self.motor_break = payload["state"]
 
 
 class RobotMSM(MqttSimMessengerServer):

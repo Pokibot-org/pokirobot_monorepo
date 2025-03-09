@@ -1,0 +1,22 @@
+menuconfig POKLEGSCOM
+	bool "POKLEGSCOM subsystem"
+
+if POKLEGSCOM
+
+DT_CHOSEN_POKIBOT_POKLEGSCOM := pokibot,poklegscom
+choice POKLEGSCOM_IMPL
+	prompt "POKLEGSCOM Implementation"
+	default POKLEGSCOM_IMPL_SIMULATED if ARCH_POSIX
+	default POKLEGSCOM_IMPL_POKMAC if $(dt_chosen_enabled,$(DT_CHOSEN_POKIBOT_POKLEGSCOM))
+
+config POKLEGSCOM_IMPL_POKMAC
+	bool "POKLEGSCOM on hardware implementation"
+	select POKTOCOL
+
+config POKLEGSCOM_IMPL_SIMULATED
+	bool "Simulated implementation"
+	select MQTT_SIM_MESSAGER
+
+endchoice
+
+endif # POKLEGSCOM
