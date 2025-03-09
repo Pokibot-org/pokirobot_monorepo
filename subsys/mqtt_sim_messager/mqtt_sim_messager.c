@@ -1,6 +1,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
-#include <pokibot/mqtt_sim_messager/msm.h>
+#include <pokibot/msm.h>
 #include <zephyr/logging/log.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@
 #include <cmdline.h>
 #include <posix_native_task.h>
 
-LOG_MODULE_REGISTER(msm, CONFIG_MQTT_SIM_MESSAGER_LOG_LEVEL);
+LOG_MODULE_REGISTER(msm, 4);
 
 
 #define ADDRESS     "tcp://127.0.0.1:1883"

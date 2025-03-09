@@ -7,8 +7,9 @@ LOG_MODULE_REGISTER(main);
 
 int main(void)
 {
+    LOG_INF("Pokibot main start");
     enum pokprotocol_team color;
-    while (!pokuicom_get_team_color(&color)) {
+    while (pokuicom_get_team_color(&color)) {
         pokuicom_request(POKTOCOL_DATA_TYPE_TEAM);
         k_sleep(K_MSEC(10));
     }

@@ -1,22 +1,12 @@
 #!/usr/bin/env python
-""" pygame.examples.moveit
-
-This is the full and final example from the Pygame Tutorial,
-"How Do I Make It Move". It creates 10 objects and animates
-them on the screen.
-
-It also has a separate player character that can be controlled with arrow keys.
-
-Note it's a bit scant on error checking, but it's easy to read. :]
-Fortunately, this is python, and we needn't wrestle with a pile of
-error codes.
-"""
 import os
 import pygame as pg
 import threading
-import socketserver
 import json
 import math
+from msm import MqttSimMessengerServer, SimNode
+import logging
+logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
@@ -26,16 +16,6 @@ class Board:
         self.real_size = [2000, 3000]
         self.dim_x = None
         self.dim_y = None
-
-
-class Robot:
-    def __init__(self) -> None:
-        self.radius = 190
-        self.pos = [0, 0]
-        self.dir = 0
-
-
-robot = Robot()
 
 
 # quick function to load an image
@@ -62,71 +42,105 @@ def draw_robot(screen, board, robot):
     )
 
 
-# here's the full code
-def main():
-    clock = pg.time.Clock()
-    screen = pg.display.set_mode((400, 300), pg.RESIZABLE)
+class SimNodeWithClbk(SimNode):
+    def __init__(self, parent, id, name, clbk) -> None:
+        super().__init__(parent, id, name)
+        self.clbk = clbk
 
-    raw_background = load_image("vinyle.png")
-    raw_background_ratio = raw_background.get_width() / raw_background.get_height()
-    # pg.display.set_caption("test")
+    def process_topic(self, topic, payload):
+        self.clbk(self, topic, payload)
 
-    board = Board()
-    # This is a simple event handler that enables player input.
-    while True:
-        info = pg.display.Info()
-        screen.fill(pg.Color(0, 0, 0))
-        background = pg.transform.scale(
-            raw_background, (info.current_h * raw_background_ratio, info.current_h)
-        )
-        board.dim_x = [0, background.get_width()]
-        board.dim_y = [0, background.get_height()]
-        screen.blit(background, (board.dim_x[0], board.dim_y[0]))
+class PokibotSimNode(SimNode):
+    def __init__(self, parent, id) -> None:
+        super().__init__(parent, id, "")
+        self.radius = 190
+        self.pos = [0, 0]
+        self.dir = 0
+        self.team = 0
+        self.add_child(SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom))
+        print(self.childs)
 
-        draw_robot(screen, board, robot)
-        # Get all keys currently pressed, and move when an arrow key is held.
-        # keys = pg.key.get_pressed()
-        # if keys[pg.ESC]:
-        #     return
-
-        for e in pg.event.get():
-            # quit upon screen exit
-            if e.type == pg.QUIT:
-                return
-
-        clock.tick(60)
-        pg.display.update()
-        pg.time.delay(100)
+    def process_pokuicom(self, parent: SimNode, topic, payload):
+        # types: SOCRE TEAM MATCHSTERTED
+        payload = json.loads(payload)
+        match topic:
+            case "request":
+                match payload["value"]:
+                    case 0:
+                        pass
+                    case 1:
+                        parent.send("team", f"{self.team}")
+                    case 2:
+                        parent.send("match", f"{1}")
+            case "score":
+                logger.info(f"New score: {payload["value"]}")
 
 
-class Session(socketserver.BaseRequestHandler):
-    def __init__(self, *args, **keys):
-        super().__init__(*args, **keys)
+class RobotMSM(MqttSimMessengerServer):
+    def __init__(self):
+        super().__init__()
+        self.robot_nodes : dict[str, PokibotSimNode]  = {}
 
-    def handle(self):
-        """Handle proto"""
-        try:
-            json_data = json.loads(self.request[0].decode())
-            if "pos" in json_data:
-                robot.pos[0] = json_data["pos"]["x"] + 1500
-                robot.pos[1] = json_data["pos"]["y"]
-                robot.dir = json_data["pos"]["a"]
-                print(robot.pos)
-        except Exception as err:
-            print("Error during decoding", err)
-            print(self.request[0])
+    def run(self):
+        def pg_fun():
+            clock = pg.time.Clock()
+            res = 1024
+            ratio = 2/3
+            screen = pg.display.set_mode((res, res*ratio), pg.RESIZABLE)
+
+            raw_background = load_image("vinyle.png")
+            raw_background_ratio = raw_background.get_width() / raw_background.get_height()
+            # pg.display.set_caption("test")
+
+            board = Board()
+            # This is a simple event handler that enables player input.
+            while True:
+                info = pg.display.Info()
+                screen.fill(pg.Color(0, 0, 0))
+                background = pg.transform.scale(
+                    raw_background, (info.current_h * raw_background_ratio, info.current_h)
+                )
+                board.dim_x = [0, background.get_width()]
+                board.dim_y = [0, background.get_height()]
+                screen.blit(background, (board.dim_x[0], board.dim_y[0]))
+
+                for name, robot in self.robot_nodes.items():
+                    draw_robot(screen, board, robot)
+                # Get all keys currently pressed, and move when an arrow key is held.
+                # keys = pg.key.get_pressed()
+                # if keys[pg.ESC]:
+                #     return
+
+                for e in pg.event.get():
+                    # quit upon screen exit
+                    if e.type == pg.QUIT:
+                        return
+
+                clock.tick(60)
+                pg.display.update()
+                pg.time.delay(100)
+        self.start()
+        pg.init()
+        pg_fun()
+        pg.quit()
+        self.stop()
+
+    def on_connect(self):
+        pass
+
+    def device_disconnected(self, dev_name):
+        pass
+
+    def process_message(self, dev_name, topic_list, payload):
+        if dev_name not in self.robot_nodes.keys():
+            self.robot_nodes[dev_name] = PokibotSimNode(self, dev_name)
+            print(self.robot_nodes[dev_name])
+        self.robot_nodes[dev_name].on_message(topic_list, payload)
+
+
 
 
 if __name__ == "__main__":
-    socket_name = "/tmp/strat_visu_server.sock"
-    try:
-        os.remove(socket_name)
-    except:
-        pass
-
-    serv = socketserver.UnixDatagramServer(socket_name, Session, bind_and_activate=True)
-    serv_thread = threading.Thread(target=serv.serve_forever)
-    serv_thread.start()
-    pg.init()
-    main()
-    pg.quit()
+    logging.basicConfig(level=logging.DEBUG)
+    r = RobotMSM()
+    r.run()
