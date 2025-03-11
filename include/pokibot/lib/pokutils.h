@@ -11,6 +11,17 @@
 #define SIGNF(_val)     (signbit(_val) ? -1.0f : 1.0f)
 #define NEG_SQRTF(_val) (SIGNF(_val) * sqrtf(fabsf(_val)))
 
+#define CONVERT_POS2_TO_POINT2(pos)                                                                \
+    (point2_t)                                                                                     \
+    {                                                                                              \
+        .x = (pos).x, .y = (pos).y                                                                 \
+    }
+#define CONVERT_POINT2_TO_POS2(point, angle)                                                       \
+    (pos2_t)                                                                                       \
+    {                                                                                              \
+        .x = (point).x, .y = (point).y, .a = (angle)                                               \
+    }
+
 vec2_t point2_diff(const point2_t terminal, const point2_t initial);
 vec2_t vec2_normalize(vec2_t vec);
 float vec2_abs(vec2_t vec);

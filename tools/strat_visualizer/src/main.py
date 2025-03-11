@@ -16,6 +16,8 @@ main_dir = os.path.split(os.path.abspath(__file__))[0]
 class Board:
     def __init__(self) -> None:
         self.real_size = [3.0, 2.0]
+        self.mins = [-1.5, 0.0]
+        self.maxs = [1.5, 2.0]
         self.dim_x = None
         self.dim_y = None
 
@@ -29,7 +31,7 @@ def load_image(name):
 def draw_robot(screen, board, robot):
     ratio = board.dim_x[1] / board.real_size[0]
     on_board_radius = robot.radius * ratio
-    on_board_pos = (robot.pos[0] * ratio, board.dim_y[1] - robot.pos[1] * ratio)
+    on_board_pos = ((robot.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (robot.pos[1] - board.mins[1]) * ratio)
 
     pg.draw.circle(screen, (30, 30, 100), on_board_pos, on_board_radius)
     pg.draw.line(
@@ -61,7 +63,8 @@ class PokibotSimNode(SimNode):
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
-        self.speed = 0.4
+        self.speed = 0.5
+        self.angle_speed = 3.14/2
         self.sensivity = 0.01
 
         self.pokuicom = SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom)
@@ -81,7 +84,7 @@ class PokibotSimNode(SimNode):
     def _sim_loop(self):
         sim_tick = 30
         time.sleep(1/sim_tick)
-        max_speed_vec = np.array([self.speed/sim_tick, self.speed/sim_tick, self.speed/sim_tick])
+        max_speed_vec = np.array([self.speed/sim_tick, self.speed/sim_tick, self.angle_speed/sim_tick])
         sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
         if self.wp_index < len(self.wps) and not self.motor_break:
             target_pos = self.wps[self.wp_index]
@@ -179,6 +182,7 @@ class RobotMSM(MqttSimMessengerServer):
 
     def device_disconnected(self, dev_name):
         self.robot_nodes[dev_name].stop_simulation()
+        self.robot_nodes.pop(dev_name)
 
     def process_message(self, dev_name, topic_list, payload):
         if dev_name not in self.robot_nodes.keys():

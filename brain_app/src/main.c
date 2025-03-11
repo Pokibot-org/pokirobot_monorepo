@@ -3,13 +3,43 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
 #include <pokibot/poklegscom.h>
+#include "pokdefs.h"
 
 LOG_MODULE_REGISTER(main);
+
+enum team_color {
+    TEAM_COLOR_NONE,
+    TEAM_COLOR_BLUE,
+    TEAM_COLOR_YELLOW,
+};
+
+struct point2 convert_point_for_team(enum team_color color, struct point2 point)
+{
+    if (color == TEAM_COLOR_BLUE) {
+        return point;
+    }
+
+    point.x = -point.x;
+    return point;
+}
+
+struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
+{
+    if (color == TEAM_COLOR_BLUE) {
+        return pos;
+    }
+
+    pos.x = -pos.x;
+    pos.a = pos.a + M_PI;
+    if (pos.a > 2 * M_PI) {
+        pos.a -= 2 * M_PI;
+    }
+    return pos;
+}
 
 int main(void)
 {
     LOG_INF("Pokibot main start");
-
 
     poklegscom_set_break(1);
     enum pokprotocol_team color;
@@ -26,17 +56,17 @@ int main(void)
 
     LOG_INF("Match started");
 
-    pos2_t start_pos = {.x = 0.5, .y=0.5, .a=0};
+    pos2_t start_pos = {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0.0f};
     poklegscom_set_pos(&start_pos);
     poklegscom_set_break(0);
 
     pos2_t waypoints[] = {
-        {.x = 0.5, .y=1.5, .a=0},
-        {.x = 2.5, .y=1.5, .a=0},
-        {.x = 2.5, .y=0.5, .a=0},
-        {.x = 0.5, .y=0.5, .a=0},
+        {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI_2},
+        {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI},
+        {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 0.5f, .a = 3 * M_PI / 2},
+        {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0},
     };
-    poklegscom_set_waypoints(waypoints, sizeof(waypoints)/sizeof(waypoints[0]));
+    poklegscom_set_waypoints(waypoints, sizeof(waypoints) / sizeof(waypoints[0]));
 
     k_sleep(K_FOREVER);
     return 0;
