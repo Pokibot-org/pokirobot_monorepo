@@ -89,7 +89,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
         userdata.on_connect()
         # we should always subscribe from on_connect callback to be sure
         # our subscribed is persisted across reconnections.
-        client.subscribe("msm/#")
+        client.subscribe("msm/+/status")
 
 class MqttSimMessengerServer:
     TX_Q_EVENT_DATA = 0
@@ -120,7 +120,6 @@ class MqttSimMessengerServer:
             ev, data = self.tx_queue.get()
             if ev == self.TX_Q_EVENT_DATA:
                 topic, payload = data
-                logger.debug(f"sending {topic} {payload}")
                 self.client.publish(topic, payload).wait_for_publish()
             elif ev == self.TX_Q_EVENT_STOP:
                 break

@@ -60,8 +60,16 @@ class PokibotSimNode(SimNode):
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
-        self.add_child(SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom))
+
+        self.pokuicom = SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom)
+        self.add_child(self.pokuicom)
+        self.pokuicom.subscribe("request")
+        self.pokuicom.subscribe("score")
+
         self.poklegscom = SimNodeWithClbk(self, 0, "poklegscom", self.process_poklegscom)
+        self.poklegscom.subscribe("set_pos")
+        self.poklegscom.subscribe("set_waypoints")
+        self.poklegscom.subscribe("set_break")
         self.add_child(self.poklegscom)
 
         self.start_simulation()
