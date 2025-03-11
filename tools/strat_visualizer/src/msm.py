@@ -14,6 +14,7 @@ class SimNode:
         self.name = name
         self.status = "unknown"
         self.childs : dict[str, dict[int, SimNode]] = {}
+        self.sim_running = False
 
     def __repr__(self) -> str:
         return str(self.childs)
@@ -63,12 +64,20 @@ class SimNode:
             return
         device_dic[child_id].on_message(trimmed_topic, payload)
 
+    def _sim_loop(self):
+        time.sleep(1)
+
     def _sim_task(self):
-        pass
+        while self.sim_running:
+            self._sim_loop()
 
     def start_simulation(self):
+        self.sim_running = True
         t = threading.Thread(target=self._sim_task, daemon=True)
         t.start()
+
+    def stop_simulation(self):
+        self.sim_running = False
 
 def on_message(client, userdata, message):
     userdata.on_message(message)

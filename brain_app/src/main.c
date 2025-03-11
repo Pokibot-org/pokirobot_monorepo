@@ -36,7 +36,7 @@ int main(void)
         {.x = 2.5, .y=0.5, .a=0},
         {.x = 0.5, .y=0.5, .a=0},
     };
-    poklegscom_set_waypoints(waypoints, sizeof(waypoints));
+    poklegscom_set_waypoints(waypoints, sizeof(waypoints)/sizeof(waypoints[0]));
 
     k_sleep(K_FOREVER);
     return 0;

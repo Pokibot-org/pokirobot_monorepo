@@ -14,7 +14,7 @@ main_dir = os.path.split(os.path.abspath(__file__))[0]
 
 class Board:
     def __init__(self) -> None:
-        self.real_size = [2000, 3000]
+        self.real_size = [3000, 2000]
         self.dim_x = None
         self.dim_y = None
 
@@ -67,10 +67,9 @@ class PokibotSimNode(SimNode):
         self.start_simulation()
         print(self.childs)
 
-    def _sim_task(self):
-        while 1:
-            time.sleep(0.1)
-            self.poklegscom.send("pos", f"{self.pos[0]} {self.pos[1]} {self.pos[2]}")
+    def _sim_loop(self):
+        time.sleep(0.1)
+        self.poklegscom.send("pos", f"{self.pos[0]} {self.pos[1]} {self.pos[2]}")
 
     def process_pokuicom(self, parent: SimNode, topic, payload):
         # types: SOCRE TEAM MATCHSTERTED
@@ -87,13 +86,21 @@ class PokibotSimNode(SimNode):
             case "score":
                 logger.info(f"New score: {payload["value"]}")
 
-    def process_poklegscom(self, parent: SimNode, topic, payload):
+    def process_poklegscom(self, parent: SimNode, topic, raw_payload):
         # types: SOCRE TEAM MATCHSTERTED
-        payload = json.loads(payload)
+        try:
+            payload = json.loads(raw_payload)
+        except Exception as e:
+            logger.error(e)
+            logger.error(raw_payload)
+            return
+
         match topic:
             case "set_pos":
                 self.pos = [payload["x"], payload["y"], payload["a"]]
             case "set_waypoints":
+                self.wp_index = 0
+                self.wps = payload
                 logger.info(f"set wps {payload}")
             case "set_break":
                 self.motor_break = payload["state"]
@@ -152,7 +159,7 @@ class RobotMSM(MqttSimMessengerServer):
         pass
 
     def device_disconnected(self, dev_name):
-        pass
+        self.robot_nodes[dev_name].stop_simulation()
 
     def process_message(self, dev_name, topic_list, payload):
         if dev_name not in self.robot_nodes.keys():

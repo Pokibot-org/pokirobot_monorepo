@@ -35,7 +35,7 @@ int poklegscom_set_waypoints(pos2_t *waypoints, size_t nb_waypoints) {
         pos2_t *pos = &waypoints[i];
         offset += snprintf(&topic_buff[offset], sizeof(topic_buff) - offset, "{\"x\": %f, \"y\": %f, \"a\": %f},", (double)pos->x, (double)pos->y, (double)pos->a);
     }
-    topic_buff[offset-1] = '}';
+    topic_buff[offset-1] = ']';
     return msm_send( ROOT_TOPIC "set_waypoints", topic_buff);
 };
 
