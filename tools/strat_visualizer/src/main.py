@@ -7,6 +7,7 @@ import math
 from msm import MqttSimMessengerServer, SimNode
 import time
 import logging
+import numpy as np
 logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
@@ -14,7 +15,7 @@ main_dir = os.path.split(os.path.abspath(__file__))[0]
 
 class Board:
     def __init__(self) -> None:
-        self.real_size = [3000, 2000]
+        self.real_size = [3.0, 2.0]
         self.dim_x = None
         self.dim_y = None
 
@@ -26,7 +27,7 @@ def load_image(name):
 
 
 def draw_robot(screen, board, robot):
-    ratio = board.dim_x[1] / board.real_size[1]
+    ratio = board.dim_x[1] / board.real_size[0]
     on_board_radius = robot.radius * ratio
     on_board_pos = (robot.pos[0] * ratio, board.dim_y[1] - robot.pos[1] * ratio)
 
@@ -54,12 +55,14 @@ class SimNodeWithClbk(SimNode):
 class PokibotSimNode(SimNode):
     def __init__(self, parent, id) -> None:
         super().__init__(parent, id, "")
-        self.radius = 190
-        self.pos = [0, 0, 0]
+        self.radius = 0.19
+        self.pos = np.array([0, 0, 0])
         self.team = 0
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
+        self.speed = 0.4
+        self.sensivity = 0.01
 
         self.pokuicom = SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom)
         self.add_child(self.pokuicom)
@@ -76,7 +79,15 @@ class PokibotSimNode(SimNode):
         print(self.childs)
 
     def _sim_loop(self):
-        time.sleep(0.1)
+        sim_tick = 30
+        time.sleep(1/sim_tick)
+        max_speed_vec = np.array([self.speed/sim_tick, self.speed/sim_tick, self.speed/sim_tick])
+        sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
+        if self.wp_index < len(self.wps) and not self.motor_break:
+            target_pos = self.wps[self.wp_index]
+            self.pos += np.maximum(np.minimum(target_pos - self.pos, max_speed_vec), -max_speed_vec)
+            if np.all(np.abs(target_pos - self.pos) < sensivity):
+                self.wp_index += 1
         self.poklegscom.send("pos", f"{self.pos[0]} {self.pos[1]} {self.pos[2]}")
 
     def process_pokuicom(self, parent: SimNode, topic, payload):
@@ -105,10 +116,10 @@ class PokibotSimNode(SimNode):
 
         match topic:
             case "set_pos":
-                self.pos = [payload["x"], payload["y"], payload["a"]]
+                self.pos = np.array([payload["x"], payload["y"], payload["a"]])
             case "set_waypoints":
                 self.wp_index = 0
-                self.wps = payload
+                self.wps = [np.array([x["x"], x["y"], x["a"]]) for x in payload]
                 logger.info(f"set wps {payload}")
             case "set_break":
                 self.motor_break = payload["state"]
