@@ -8,10 +8,49 @@ from msm import MqttSimMessengerServer, SimNode
 import time
 import logging
 import numpy as np
+from shapely.geometry import LineString, Point, Polygon
+
 logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
+
+class Obstacle:
+    def __init__(self, shape: Polygon) -> None:
+        self.shape = shape
+
+    def get_closest_collision_point(self, ray_origin, ray_direction, ray_len = 1000):
+        # Create a long line segment in the direction of the ray
+        ray_end = Point(ray_origin.x + ray_direction.x * ray_len, ray_origin.y + ray_direction.y * ray_len)
+        ray = LineString([ray_origin, ray_end])
+
+        # Find the intersection points
+        intersection = ray.intersection(self.shape)
+
+        if intersection.is_empty:
+            return None  # No intersection
+
+        # If there are multiple intersection points, find the closest one
+        if intersection.geom_type == 'MultiPoint' or intersection.geom_type == 'GeometryCollection':
+            closest_point = None
+            min_distance = float('inf')
+
+            for point in intersection:
+                distance = ray_origin.distance(point)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_point = point
+
+            return closest_point
+        else:
+            return intersection
+
+class CircleObstacle(Obstacle):
+    def __init__(self, pos, radius) -> None:
+        self.pos = pos
+        self.radius = radius
+        shape = Point(pos[0], pos[1]).buffer(radius)
+        super().__init__(shape)
 
 class Board:
     def __init__(self) -> None:
@@ -45,6 +84,12 @@ def draw_robot(screen, board, robot):
         width=4,
     )
 
+def draw_obstacle(screen, board, obstacle: CircleObstacle):
+    ratio = board.dim_x[1] / board.real_size[0]
+    on_board_radius = obstacle.radius * ratio
+    on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
+
+    pg.draw.circle(screen, (30, 50, 30), on_board_pos, on_board_radius)
 
 class SimNodeWithClbk(SimNode):
     def __init__(self, parent, id, name, clbk) -> None:
@@ -79,7 +124,6 @@ class PokibotSimNode(SimNode):
         self.add_child(self.poklegscom)
 
         self.start_simulation()
-        print(self.childs)
 
     def _sim_loop(self):
         sim_tick = 30
@@ -128,9 +172,12 @@ class PokibotSimNode(SimNode):
                 self.motor_break = payload["state"]
 
 
-class RobotMSM(MqttSimMessengerServer):
+class PokibotGameSimulator:
     def __init__(self):
         super().__init__()
+
+        self.msms = MqttSimMessengerServer(self.process_message, self.device_disconnected)
+        self.obstacles = [CircleObstacle([0, 1.5], 0.2)]
         self.robot_nodes : dict[str, PokibotSimNode]  = {}
 
     def run(self):
@@ -158,10 +205,9 @@ class RobotMSM(MqttSimMessengerServer):
 
                 for name, robot in self.robot_nodes.items():
                     draw_robot(screen, board, robot)
-                # Get all keys currently pressed, and move when an arrow key is held.
-                # keys = pg.key.get_pressed()
-                # if keys[pg.ESC]:
-                #     return
+
+                for obstacle in self.obstacles:
+                    draw_obstacle(screen, board, obstacle)
 
                 for e in pg.event.get():
                     # quit upon screen exit
@@ -171,14 +217,12 @@ class RobotMSM(MqttSimMessengerServer):
                 clock.tick(60)
                 pg.display.update()
                 pg.time.delay(100)
-        self.start()
+
+        self.msms.start()
         pg.init()
         pg_fun()
         pg.quit()
-        self.stop()
-
-    def on_connect(self):
-        pass
+        self.msms.stop()
 
     def device_disconnected(self, dev_name):
         self.robot_nodes[dev_name].stop_simulation()
@@ -186,7 +230,7 @@ class RobotMSM(MqttSimMessengerServer):
 
     def process_message(self, dev_name, topic_list, payload):
         if dev_name not in self.robot_nodes.keys():
-            self.robot_nodes[dev_name] = PokibotSimNode(self, dev_name)
+            self.robot_nodes[dev_name] = PokibotSimNode(self.msms, dev_name)
             print(self.robot_nodes[dev_name])
         self.robot_nodes[dev_name].on_message(topic_list, payload)
 
@@ -195,5 +239,5 @@ class RobotMSM(MqttSimMessengerServer):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    r = RobotMSM()
+    r = PokibotGameSimulator()
     r.run()

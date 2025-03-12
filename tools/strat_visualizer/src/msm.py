@@ -86,7 +86,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code.is_failure:
         logger.info(f"Failed to connect: {reason_code}. loop_forever() will retry connection")
     else:
-        userdata.on_connect()
+        userdata.on_connect_clbk()
         # we should always subscribe from on_connect callback to be sure
         # our subscribed is persisted across reconnections.
         client.subscribe("msm/+/status")
@@ -94,7 +94,11 @@ def on_connect(client, userdata, flags, reason_code, properties):
 class MqttSimMessengerServer:
     TX_Q_EVENT_DATA = 0
     TX_Q_EVENT_STOP = 1
-    def __init__(self):
+    def __init__(self, msg_clbk, obj_diconnect_clbk, on_connect_clbk=lambda:()):
+        self.msg_clbk = msg_clbk
+        self.obj_diconnect_clbk = obj_diconnect_clbk
+        self.on_connect_clbk = on_connect_clbk
+
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.client.on_connect = on_connect
         self.client.on_message = on_message
@@ -130,11 +134,11 @@ class MqttSimMessengerServer:
         dev_name = split_topic[1]
         trimmed_topic = split_topic[2:]
         decoded_payload = message.payload.decode()
-        self.process_message(dev_name, trimmed_topic, decoded_payload)
+        self.msg_clbk(dev_name, trimmed_topic, decoded_payload)
 
         if len(trimmed_topic) == 1:
             if trimmed_topic[0] == "status" and decoded_payload == "disconnected":
-                self.device_disconnected(dev_name)
+                self.obj_diconnect_clbk(dev_name)
                 logger.info(f"Freeing device {dev_name}")
 
     def send(self, topic, payload):
@@ -145,12 +149,3 @@ class MqttSimMessengerServer:
     def subscribe(self, topic):
         topic = "msm/" + topic
         self.client.subscribe(topic)
-
-    def on_connect(self):
-        pass
-
-    def device_disconnected(self, dev_name):
-        pass
-
-    def process_message(self, dev_name, topic_list, payload):
-        pass
