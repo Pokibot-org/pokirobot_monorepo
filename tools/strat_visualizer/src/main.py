@@ -4,16 +4,26 @@ import pygame as pg
 import threading
 import json
 import math
-from msm import MqttSimMessengerServer, SimNode
+from msm import MqttSimMessengerServer, MqttSimMessengerNode
 import time
 import logging
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
+from dataclasses import dataclass
 
 logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
+COLOR_DEEPBLACK = (0, 0, 0)
+COLOR_RED = (0xE3, 0x65, 0x5B)
+COLOR_YELLOW = (0xCF, 0xD1, 0x86)
+COLOR_GREEN = (0x5B, 0x8C, 0x5A)
+COLOR_GRAY = (0x59, 0x61, 0x57)
+COLOR_PURPLE = (0x52, 0x41, 0x4C)
+
+COLOR_TEAM_BLUE = (0x00, 0x5B, 0x8C)
+COLOR_TEAM_YELLOW = (0xF7, 0xB5, 0x00)
 
 class Obstacle:
     def __init__(self, shape: Polygon) -> None:
@@ -72,10 +82,12 @@ def draw_robot(screen, board, robot):
     on_board_radius = robot.radius * ratio
     on_board_pos = ((robot.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (robot.pos[1] - board.mins[1]) * ratio)
 
-    pg.draw.circle(screen, (30, 30, 100), on_board_pos, on_board_radius)
+    color = COLOR_TEAM_YELLOW if robot.team else COLOR_TEAM_BLUE
+    pg.draw.circle(screen, (0,0,0), on_board_pos, on_board_radius)
+    pg.draw.circle(screen, color, on_board_pos, on_board_radius * 0.9)
     pg.draw.line(
         screen,
-        (130, 30, 30),
+        COLOR_GRAY,
         on_board_pos,
         (
             on_board_pos[0] + on_board_radius * math.cos(robot.pos[2]),
@@ -84,14 +96,52 @@ def draw_robot(screen, board, robot):
         width=4,
     )
 
-def draw_obstacle(screen, board, obstacle: CircleObstacle):
+def draw_obstacle(screen, board, obstacle: Obstacle):
     ratio = board.dim_x[1] / board.real_size[0]
-    on_board_radius = obstacle.radius * ratio
-    on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
 
-    pg.draw.circle(screen, (30, 50, 30), on_board_pos, on_board_radius)
+    if type(obstacle) is CircleObstacle:
+        on_board_radius = obstacle.radius * ratio
+        on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
+        pg.draw.circle(screen, COLOR_DEEPBLACK, on_board_pos, on_board_radius)
+        pg.draw.circle(screen, COLOR_GREEN, on_board_pos, on_board_radius*0.98)
 
-class SimNodeWithClbk(SimNode):
+def draw_debug_point(screen, board, pos, radius=0.01, color=COLOR_RED):
+    ratio = board.dim_x[1] / board.real_size[0]
+    on_board_radius = radius * ratio
+    on_board_pos = ((pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (pos[1] - board.mins[1]) * ratio)
+    pg.draw.circle(screen, color, on_board_pos, on_board_radius)
+
+class SimProcess:
+    def __init__(self, loop_clbk, frequency) -> None:
+        self.sim_running = False
+        self.loop_clbk = loop_clbk
+        self.cycle_time = 1/frequency
+
+    def start(self):
+        def sim_task():
+            t0 = time.perf_counter()
+            time_counter = 0
+            while self.sim_running:
+                self.loop_clbk(self.cycle_time)
+                now = time.perf_counter()
+                elapsed_time = now - t0
+                target_time = time_counter + self.cycle_time
+                if elapsed_time < target_time:
+                    time.sleep(target_time - elapsed_time)
+                time_counter += self.cycle_time
+
+        self.sim_running = True
+        t = threading.Thread(target=sim_task, daemon=True)
+        t.start()
+
+    def stop(self):
+        self.sim_running = False
+
+class PokuicomSim:
+    def __init__(self, msm: MqttSimMessengerNode) -> None:
+        self.msm = msm
+
+class SimNodeWithClbk(MqttSimMessengerNode):
     def __init__(self, parent, id, name, clbk) -> None:
         super().__init__(parent, id, name)
         self.clbk = clbk
@@ -99,12 +149,13 @@ class SimNodeWithClbk(SimNode):
     def process_topic(self, topic, payload):
         self.clbk(self, topic, payload)
 
-class PokibotSimNode(SimNode):
-    def __init__(self, parent, id) -> None:
+class PokirobotSim(MqttSimMessengerNode):
+    def __init__(self, parent, id, team) -> None:
         super().__init__(parent, id, "")
+        self.msm = MqttSimMessengerNode(parent, id, "")
         self.radius = 0.19
         self.pos = np.array([0, 0, 0])
-        self.team = 0
+        self.team = team
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
@@ -123,21 +174,31 @@ class PokibotSimNode(SimNode):
         self.poklegscom.subscribe("set_break")
         self.add_child(self.poklegscom)
 
+        self.sim_process = [SimProcess(self.movement_sim, 60), SimProcess(self.pos_publish, 30)]
         self.start_simulation()
 
-    def _sim_loop(self):
-        sim_tick = 30
-        time.sleep(1/sim_tick)
-        max_speed_vec = np.array([self.speed/sim_tick, self.speed/sim_tick, self.angle_speed/sim_tick])
+    def start_simulation(self):
+        for process in self.sim_process:
+            process.start()
+        logger.info("start sim processes")
+
+    def stop_simulation(self):
+        for process in self.sim_process:
+            process.stop()
+
+    def movement_sim(self, dt):
+        max_speed_vec = np.array([self.speed*dt, self.speed*dt, self.angle_speed*dt])
         sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
         if self.wp_index < len(self.wps) and not self.motor_break:
             target_pos = self.wps[self.wp_index]
             self.pos += np.maximum(np.minimum(target_pos - self.pos, max_speed_vec), -max_speed_vec)
             if np.all(np.abs(target_pos - self.pos) < sensivity):
                 self.wp_index += 1
+
+    def pos_publish(self, dt):
         self.poklegscom.send("pos", f"{self.pos[0]} {self.pos[1]} {self.pos[2]}")
 
-    def process_pokuicom(self, parent: SimNode, topic, payload):
+    def process_pokuicom(self, parent: MqttSimMessengerNode, topic, payload):
         # types: SOCRE TEAM MATCHSTERTED
         payload = json.loads(payload)
         match topic:
@@ -152,7 +213,7 @@ class PokibotSimNode(SimNode):
             case "score":
                 logger.info(f"New score: {payload["value"]}")
 
-    def process_poklegscom(self, parent: SimNode, topic, raw_payload):
+    def process_poklegscom(self, parent: MqttSimMessengerNode, topic, raw_payload):
         # types: SOCRE TEAM MATCHSTERTED
         try:
             payload = json.loads(raw_payload)
@@ -171,14 +232,20 @@ class PokibotSimNode(SimNode):
             case "set_break":
                 self.motor_break = payload["state"]
 
+@dataclass
+class World:
+    obstacles: list[Obstacle]
+
+def robot_builder(id: str, msms: MqttSimMessengerServer, world: World, team=0) -> PokirobotSim:
+    return PokirobotSim(msms, id, team)
 
 class PokibotGameSimulator:
     def __init__(self):
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.process_message, self.device_disconnected)
-        self.obstacles = [CircleObstacle([0, 1.5], 0.2)]
-        self.robot_nodes : dict[str, PokibotSimNode]  = {}
+        self.world = World(obstacles=[CircleObstacle([0, 1.5], 0.2)])
+        self.robot_nodes : dict[str, PokirobotSim]  = {}
 
     def run(self):
         def pg_fun():
@@ -206,7 +273,7 @@ class PokibotGameSimulator:
                 for name, robot in self.robot_nodes.items():
                     draw_robot(screen, board, robot)
 
-                for obstacle in self.obstacles:
+                for obstacle in self.world.obstacles:
                     draw_obstacle(screen, board, obstacle)
 
                 for e in pg.event.get():
@@ -230,7 +297,7 @@ class PokibotGameSimulator:
 
     def process_message(self, dev_name, topic_list, payload):
         if dev_name not in self.robot_nodes.keys():
-            self.robot_nodes[dev_name] = PokibotSimNode(self.msms, dev_name)
+            self.robot_nodes[dev_name] = robot_builder(dev_name, self.msms, self.world)
             print(self.robot_nodes[dev_name])
         self.robot_nodes[dev_name].on_message(topic_list, payload)
 

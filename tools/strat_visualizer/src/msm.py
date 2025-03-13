@@ -7,14 +7,13 @@ from abc import ABC
 
 logger = logging.getLogger("msm")
 
-class SimNode:
+class MqttSimMessengerNode:
     def __init__(self, parent, id=None, name=None) -> None:
         self.parent = parent
         self.id = id
         self.name = name
         self.status = "unknown"
-        self.childs : dict[str, dict[int, SimNode]] = {}
-        self.sim_running = False
+        self.childs : dict[str, dict[int, MqttSimMessengerNode]] = {}
 
     def __repr__(self) -> str:
         return str(self.childs)
@@ -63,21 +62,6 @@ class SimNode:
             logger.error(f"Child id not found for topic list {topic_list}")
             return
         device_dic[child_id].on_message(trimmed_topic, payload)
-
-    def _sim_loop(self):
-        time.sleep(1)
-
-    def _sim_task(self):
-        while self.sim_running:
-            self._sim_loop()
-
-    def start_simulation(self):
-        self.sim_running = True
-        t = threading.Thread(target=self._sim_task, daemon=True)
-        t.start()
-
-    def stop_simulation(self):
-        self.sim_running = False
 
 def on_message(client, userdata, message):
     userdata.on_message(message)
