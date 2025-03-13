@@ -281,9 +281,8 @@ class PokibotGameSimulator:
                     if e.type == pg.QUIT:
                         return
 
-                clock.tick(60)
                 pg.display.update()
-                pg.time.delay(100)
+                clock.tick(60)
 
         self.msms.start()
         pg.init()
