@@ -42,7 +42,7 @@ class MqttSimMessengerNode:
         pass
 
     def recv_message(self, topic_list, payload):
-        logger.debug(f"<{self.name}|{self.id}>: on_message: {topic_list}")
+        # logger.debug(f"<{self.name}|{self.id}>: on_message: {topic_list}")
         if len(topic_list) == 0:
             return
         elif len(topic_list) == 1:
