@@ -67,8 +67,8 @@ class Board:
         self.real_size = [3.0, 2.0]
         self.mins = [-1.5, 0.0]
         self.maxs = [1.5, 2.0]
-        self.dim_x = None
-        self.dim_y = None
+        self.dim_x = [0, 1]
+        self.dim_y = [0, 1]
 
 
 # quick function to load an image
@@ -287,6 +287,8 @@ class PokibotGameSimulator:
         self.msms.start()
         pg.init()
         pg_fun()
+        for id, robot in self.robot_nodes.items():
+            robot.stop_simulation()
         pg.quit()
         self.msms.stop()
 

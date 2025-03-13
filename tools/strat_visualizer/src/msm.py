@@ -89,7 +89,7 @@ class MqttSimMessengerServer:
         self.client.user_data_set(self)
         self.client.will_set("sim/status", "terminated")
         self.tx_queue = queue.SimpleQueue()
-        self.tx_task = threading.Thread(target=self._tx_task)
+        self.tx_task = threading.Thread(target=self._tx_task, daemon=True)
 
     def start(self):
         logger.info("Start")
