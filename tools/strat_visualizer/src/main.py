@@ -142,11 +142,7 @@ class SimProcess:
     def stop(self):
         self.sim_running = False
 
-class PokuicomSim:
-    def __init__(self, msm: MqttSimMessengerNode, robot: Robot) -> None:
-        self.msm = msm
-
-class SimNodeWithClbk(MqttSimMessengerNode):
+class MqttSimMessengerNodeWithClbk(MqttSimMessengerNode):
     def __init__(self, parent, id, name, clbk) -> None:
         super().__init__(parent, id, name)
         self.clbk = clbk
@@ -154,51 +150,25 @@ class SimNodeWithClbk(MqttSimMessengerNode):
     def process_topic(self, topic, payload):
         self.clbk(self, topic, payload)
 
-class PokirobotSim(MqttSimMessengerNode):
-    def __init__(self, parent, id, robot: Robot) -> None:
-        super().__init__(parent, id, "")
-        self.robot = robot
-        self.wp_index = 0
-        self.wps = []
-        self.motor_break = False
-        self.speed = 0.5
-        self.angle_speed = 3.14/2
-        self.sensivity = 0.01
+class SimPart:
+    def __init__(self, sim_process = []) -> None:
+        self.sim_process = sim_process
 
-        self.pokuicom = SimNodeWithClbk(self, 0, "pokuicom", self.process_pokuicom)
-        self.add_child(self.pokuicom)
-        self.pokuicom.subscribe("request")
-        self.pokuicom.subscribe("score")
-
-        self.poklegscom = SimNodeWithClbk(self, 0, "poklegscom", self.process_poklegscom)
-        self.poklegscom.subscribe("set_pos")
-        self.poklegscom.subscribe("set_waypoints")
-        self.poklegscom.subscribe("set_break")
-        self.add_child(self.poklegscom)
-
-        self.sim_process = [SimProcess(self.movement_sim, 60), SimProcess(self.pos_publish, 30)]
-        self.start_simulation()
-
-    def start_simulation(self):
+    def start(self):
         for process in self.sim_process:
             process.start()
-        logger.info("start sim processes")
 
-    def stop_simulation(self):
+    def stop(self):
         for process in self.sim_process:
             process.stop()
 
-    def movement_sim(self, dt):
-        max_speed_vec = np.array([self.speed*dt, self.speed*dt, self.angle_speed*dt])
-        sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
-        if self.wp_index < len(self.wps) and not self.motor_break:
-            target_pos = self.wps[self.wp_index]
-            self.robot.pos += np.maximum(np.minimum(target_pos - self.robot.pos, max_speed_vec), -max_speed_vec)
-            if np.all(np.abs(target_pos - self.robot.pos) < sensivity):
-                self.wp_index += 1
-
-    def pos_publish(self, dt):
-        self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
+class PokuicomSim(SimPart):
+    def __init__(self, msm: MqttSimMessengerNode, robot: Robot) -> None:
+        super().__init__()
+        self.robot = robot
+        self.pokuicom = MqttSimMessengerNodeWithClbk(msm, 0, "pokuicom", self.process_pokuicom)
+        self.pokuicom.subscribe("request")
+        self.pokuicom.subscribe("score")
 
     def process_pokuicom(self, parent: MqttSimMessengerNode, topic, payload):
         # types: SOCRE TEAM MATCHSTERTED
@@ -214,6 +184,22 @@ class PokirobotSim(MqttSimMessengerNode):
                         parent.send("match", f"{1}")
             case "score":
                 logger.info(f"New score: {payload["value"]}")
+
+class PoklegscomSim(SimPart):
+    def __init__(self, msm: MqttSimMessengerNode, robot: Robot) -> None:
+        super().__init__([SimProcess(self.movement_sim, 60), SimProcess(self.pos_publish, 30)])
+        self.robot = robot
+        self.wp_index = 0
+        self.wps = []
+        self.motor_break = False
+        self.speed = 0.5
+        self.angle_speed = 3.14/2
+        self.sensivity = 0.01
+
+        self.poklegscom = MqttSimMessengerNodeWithClbk(msm, 0, "poklegscom", self.process_poklegscom)
+        self.poklegscom.subscribe("set_pos")
+        self.poklegscom.subscribe("set_waypoints")
+        self.poklegscom.subscribe("set_break")
 
     def process_poklegscom(self, parent: MqttSimMessengerNode, topic, raw_payload):
         # types: SCORE TEAM MATCHSTERTED
@@ -234,19 +220,37 @@ class PokirobotSim(MqttSimMessengerNode):
             case "set_break":
                 self.motor_break = payload["state"]
 
+    def movement_sim(self, dt):
+        max_speed_vec = np.array([self.speed*dt, self.speed*dt, self.angle_speed*dt])
+        sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
+        if self.wp_index < len(self.wps) and not self.motor_break:
+            target_pos = self.wps[self.wp_index]
+            self.robot.pos += np.maximum(np.minimum(target_pos - self.robot.pos, max_speed_vec), -max_speed_vec)
+            if np.all(np.abs(target_pos - self.robot.pos) < sensivity):
+                self.wp_index += 1
+
+    def pos_publish(self, dt):
+        self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
+
+class PokirobotSim(SimPart):
+    def __init__(self, sim_process) -> None:
+        super().__init__(sim_process)
+        self.start()
+
 @dataclass
 class World:
     obstacles: list[Obstacle]
 
 def pokirobot_builder(id: str, msms: MqttSimMessengerServer, world: World, team=0) -> tuple[Robot, PokirobotSim]:
     robot = Robot(team=team)
-    return robot, PokirobotSim(msms, id, robot)
+    pokirobot_msm = MqttSimMessengerNode(msms, id, 'pokirobot')
+    return robot, PokirobotSim([PokuicomSim(pokirobot_msm, robot), PoklegscomSim(pokirobot_msm, robot)])
 
 class PokibotGameSimulator:
     def __init__(self):
         super().__init__()
 
-        self.msms = MqttSimMessengerServer(self.process_message, self.device_disconnected)
+        self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
         self.world = World(obstacles=[CircleObstacle([0, 1.5], 0.2)])
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
@@ -292,24 +296,21 @@ class PokibotGameSimulator:
         pg.init()
         pg_fun()
         for id, robot in self.pokirobot_sim_nodes.items():
-            robot.stop_simulation()
+            robot.stop()
         pg.quit()
         self.msms.stop()
 
-    def device_disconnected(self, dev_name):
-        self.pokirobot_sim_nodes[dev_name].stop_simulation()
-        self.pokirobot_sim_nodes.pop(dev_name)
-        self.robots.pop("pokirobot_" + dev_name)
+    def on_device_connection(self, dev_name, dev_id):
+        if dev_id not in self.pokirobot_sim_nodes.keys():
+            robot, pokirobot = pokirobot_builder(dev_id, self.msms, self.world)
+            self.robots["pokirobot_" + dev_id] = robot
+            self.pokirobot_sim_nodes[dev_id] = pokirobot
 
-    def process_message(self, dev_name, topic_list, payload):
-        if dev_name not in self.pokirobot_sim_nodes.keys():
-            robot, pokirobot = pokirobot_builder(dev_name, self.msms, self.world)
-            self.robots["pokirobot_" + dev_name] = robot
-            self.pokirobot_sim_nodes[dev_name] = pokirobot
-
-        self.pokirobot_sim_nodes[dev_name].on_message(topic_list, payload)
-
-
+    def on_device_disconnection(self, dev_name, dev_id):
+        if dev_id in self.pokirobot_sim_nodes.keys():
+            self.pokirobot_sim_nodes[dev_id].stop()
+            self.pokirobot_sim_nodes.pop(dev_id)
+            self.robots.pop("pokirobot_" + dev_id)
 
 
 if __name__ == "__main__":

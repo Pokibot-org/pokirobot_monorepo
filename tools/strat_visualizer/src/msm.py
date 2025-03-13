@@ -14,6 +14,8 @@ class MqttSimMessengerNode:
         self.name = name
         self.status = "unknown"
         self.childs : dict[str, dict[int, MqttSimMessengerNode]] = {}
+        if parent:
+            parent.add_child(self)
 
     def __repr__(self) -> str:
         return str(self.childs)
@@ -21,7 +23,7 @@ class MqttSimMessengerNode:
     def add_child(self, node):
         if node.name not in self.childs.keys():
             self.childs[node.name] = {}
-        self.childs[node.name][node.id] = node
+        self.childs[node.name][int(node.id)] = node
 
     def _build_upper_topic(self, topic):
         if self.name:
@@ -39,8 +41,8 @@ class MqttSimMessengerNode:
     def process_topic(self, topic, payload):
         pass
 
-    def on_message(self, topic_list, payload):
-        # logger.debug(f"<{self.name}|{self.id}>: on_message: {topic_list}")
+    def recv_message(self, topic_list, payload):
+        logger.debug(f"<{self.name}|{self.id}>: on_message: {topic_list}")
         if len(topic_list) == 0:
             return
         elif len(topic_list) == 1:
@@ -54,14 +56,16 @@ class MqttSimMessengerNode:
         trimmed_topic = topic_list[2:]
 
         if child_name not in self.childs.keys():
-            logger.error(f"Child not found for topic list {topic_list}")
+            logger.error(f"Child {child_name} not found for topic list {topic_list}")
+            logger.error(f"childs {self.childs}")
             return
         device_dic = self.childs[child_name]
 
         if child_id not in device_dic.keys():
-            logger.error(f"Child id not found for topic list {topic_list}")
+            logger.error(f"Child id {child_id} not found for topic list {topic_list}")
+            logger.error(f"childs {self.childs}")
             return
-        device_dic[child_id].on_message(trimmed_topic, payload)
+        device_dic[child_id].recv_message(trimmed_topic, payload)
 
 def on_message(client, userdata, message):
     userdata.on_message(message)
@@ -73,13 +77,14 @@ def on_connect(client, userdata, flags, reason_code, properties):
         userdata.on_connect_clbk()
         # we should always subscribe from on_connect callback to be sure
         # our subscribed is persisted across reconnections.
-        client.subscribe("msm/+/status")
+        client.subscribe("msm/+/+/status")
 
-class MqttSimMessengerServer:
+class MqttSimMessengerServer(MqttSimMessengerNode):
     TX_Q_EVENT_DATA = 0
     TX_Q_EVENT_STOP = 1
-    def __init__(self, msg_clbk, obj_diconnect_clbk, on_connect_clbk=lambda:()):
-        self.msg_clbk = msg_clbk
+    def __init__(self, obj_connect_clbk, obj_diconnect_clbk, on_connect_clbk=lambda:()):
+        super().__init__(None, '', None)
+        self.obj_connect_clbk = obj_connect_clbk
         self.obj_diconnect_clbk = obj_diconnect_clbk
         self.on_connect_clbk = on_connect_clbk
 
@@ -113,17 +118,22 @@ class MqttSimMessengerServer:
                 break
 
     def on_message(self, message):
-        logger.debug(f"< {message.topic} {message.payload.decode()}")
+        # logger.debug(f"< {message.topic} {message.payload.decode()}")
         split_topic = message.topic.split("/")
         dev_name = split_topic[1]
-        trimmed_topic = split_topic[2:]
+        dev_id = split_topic[2]
+        trimmed_topic = split_topic[3:]
         decoded_payload = message.payload.decode()
-        self.msg_clbk(dev_name, trimmed_topic, decoded_payload)
 
-        if len(trimmed_topic) == 1:
-            if trimmed_topic[0] == "status" and decoded_payload == "disconnected":
-                self.obj_diconnect_clbk(dev_name)
-                logger.info(f"Freeing device {dev_name}")
+        if len(trimmed_topic) == 1 and trimmed_topic[0] == "status":
+            if decoded_payload == "connected":
+                logger.info(f"Dev connection {dev_name}")
+                self.obj_connect_clbk(dev_name, dev_id)
+            if decoded_payload == "disconnected":
+                logger.info(f"Dev disconnection {dev_name}")
+                self.obj_diconnect_clbk(dev_name, dev_id)
+        else:
+            self.recv_message(split_topic[1:], decoded_payload)
 
     def send(self, topic, payload):
         topic = "msm/" + topic

@@ -8,5 +8,8 @@ module-str = msm
 module-help = Tools used for simulation on the host
 source "subsys/logging/Kconfig.template.log_config"
 
-endif
+config MSM_DEVICE_NAME
+    string "Device name used in msm topics"
+    default "pokirobot"
 
+endif

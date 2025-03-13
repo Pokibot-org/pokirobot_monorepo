@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(msm);
 #define ADDRESS     "tcp://127.0.0.1:1883"
 #define QOS         0
 #define TIMEOUT     1000L
-#define ROOT_TOPIC "msm/"
+#define ROOT_TOPIC "msm/" CONFIG_MSM_DEVICE_NAME "/"
 
 static char pid_client_id[32];
 static char *client_id = NULL;
