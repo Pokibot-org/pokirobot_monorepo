@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 import os
+
+from shapely.geometry.base import BaseGeometry
+from shapely.lib import box
+
 import pygame as pg
 import threading
 import json
@@ -9,7 +13,8 @@ import time
 import logging
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
-from dataclasses import dataclass
+from shapely.ops import unary_union
+from dataclasses import dataclass, field
 
 logger = logging.getLogger("strat_visu")
 
@@ -29,31 +34,38 @@ class Obstacle:
     def __init__(self, shape: Polygon) -> None:
         self.shape = shape
 
-    def get_closest_collision_point(self, ray_origin, ray_direction, ray_len = 1000):
-        # Create a long line segment in the direction of the ray
-        ray_end = Point(ray_origin.x + ray_direction.x * ray_len, ray_origin.y + ray_direction.y * ray_len)
-        ray = LineString([ray_origin, ray_end])
+    def get_shape(self):
+        return self.shape
 
-        # Find the intersection points
-        intersection = ray.intersection(self.shape)
+def get_closest_collision_point(shape: BaseGeometry, ray_origin: Point, ray_direction: Point, ray_len = 1000):
+    # Create a long line segment in the direction of the ray
+    ray_end = Point(ray_origin.x + ray_direction.x * ray_len, ray_origin.y + ray_direction.y * ray_len)
+    ray = LineString([ray_origin, ray_end])
 
-        if intersection.is_empty:
+    # Find the intersection points
+    intersection = ray.intersection(shape)
+
+    if intersection.is_empty:
             return None  # No intersection
 
-        # If there are multiple intersection points, find the closest one
-        if intersection.geom_type == 'MultiPoint' or intersection.geom_type == 'GeometryCollection':
-            closest_point = None
-            min_distance = float('inf')
+    if isinstance(intersection, Point):
+        return intersection  # Single intersection point
 
-            for point in intersection:
-                distance = ray_origin.distance(point)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_point = point
+    # Handle MultiPoint or GeometryCollection
+    if intersection.geom_type in ['MultiPoint', 'GeometryCollection']:
+        points = [pt for pt in intersection.geoms if isinstance(pt, Point)]
+        if not points:
+            return None
+        closest_point = min(points, key=lambda p: p.distance(Point(ray_origin)))
+        return closest_point
 
-            return closest_point
-        else:
-            return intersection
+    # Handle LineString case: Return the closest endpoint
+    if isinstance(intersection, LineString):
+        first_point = Point(intersection.coords[0])  # First point of the segment
+        last_point = Point(intersection.coords[-1])  # Last point of the segment
+        return min([first_point, last_point], key=lambda p: p.distance(Point(ray_origin)))
+
+    return None  # Default case
 
 class CircleObstacle(Obstacle):
     def __init__(self, pos, radius) -> None:
@@ -75,7 +87,11 @@ class Robot:
         self.radius = radius
         self.pos = np.array([0, 0, 0])
         self.team = team
+        self.lidar_points: list[tuple[float, float]] = []
 
+@dataclass
+class World:
+    obstacles: list[Obstacle] = field(default_factory=list)
 
 # quick function to load an image
 def load_image(name):
@@ -202,7 +218,7 @@ class PoklegscomSim(SimPart):
         self.poklegscom.subscribe("set_break")
 
     def process_poklegscom(self, parent: MqttSimMessengerNode, topic, raw_payload):
-        # types: SCORE TEAM MATCHSTERTED
+        # types: SCORE TEAM MATCH_STARTED
         try:
             payload = json.loads(raw_payload)
         except Exception as e:
@@ -232,19 +248,54 @@ class PoklegscomSim(SimPart):
     def pos_publish(self, dt):
         self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
 
+
+class LidarSim(SimPart):
+    def __init__(self, msm: MqttSimMessengerNode, robot: Robot, world: World, id=0) -> None:
+        super().__init__([SimProcess(self.lidar_scan, 10)])
+        self.robot = robot
+        self.world = world
+        self.publish = False
+        self.resolution = 360
+
+        self.msm = MqttSimMessengerNodeWithClbk(msm, id, "lidar", self.process_com)
+
+
+    def process_com(self, parent: MqttSimMessengerNode, topic, raw_payload):
+        try:
+            payload = json.loads(raw_payload)
+        except Exception as e:
+            logger.error(e)
+            logger.error(raw_payload)
+            return
+
+        match topic:
+            case "start_publish":
+                self.publish = True
+
+
+    def lidar_scan(self, dt):
+        point_list = []
+        obstacle_shape = unary_union([obstacle.get_shape() for obstacle in self.world.obstacles])
+
+        for i in range(self.resolution):
+            a = i/self.resolution * 2 * np.pi
+            dir = [np.cos(a), np.sin(a)]
+            shapely_point = get_closest_collision_point(obstacle_shape, Point(self.robot.pos[0:2]), Point(dir))
+            if shapely_point:
+                point_list.append([shapely_point.x, shapely_point.y])
+        self.robot.lidar_points = point_list
+        # self.msm.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
+
+
 class PokirobotSim(SimPart):
     def __init__(self, sim_process) -> None:
         super().__init__(sim_process)
         self.start()
 
-@dataclass
-class World:
-    obstacles: list[Obstacle]
-
 def pokirobot_builder(id: str, msms: MqttSimMessengerServer, world: World, team=0) -> tuple[Robot, PokirobotSim]:
     robot = Robot(team=team)
     pokirobot_msm = MqttSimMessengerNode(msms, id, 'pokirobot')
-    return robot, PokirobotSim([PokuicomSim(pokirobot_msm, robot), PoklegscomSim(pokirobot_msm, robot)])
+    return robot, PokirobotSim([PokuicomSim(pokirobot_msm, robot), PoklegscomSim(pokirobot_msm, robot), LidarSim(pokirobot_msm, robot, world, 0)])
 
 class PokibotGameSimulator:
     def __init__(self):
@@ -278,11 +329,14 @@ class PokibotGameSimulator:
                 board.dim_y = [0, background.get_height()]
                 screen.blit(background, (board.dim_x[0], board.dim_y[0]))
 
-                for name, robot in self.robots.items():
-                    draw_robot(screen, board, robot)
-
                 for obstacle in self.world.obstacles:
                     draw_obstacle(screen, board, obstacle)
+
+                for name, robot in self.robots.items():
+                    draw_robot(screen, board, robot)
+                    for point in robot.lidar_points:
+                        draw_debug_point(screen, board, point)
+
 
                 for e in pg.event.get():
                     # quit upon screen exit
