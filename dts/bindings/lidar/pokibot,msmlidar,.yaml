@@ -1,0 +1,11 @@
+description: |
+  msmlidar lidar driver
+
+compatible: "pokibot,msmlidar"
+
+include: base.yaml
+
+properties:
+  id:
+    type: int
+    required: true

@@ -2,7 +2,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
-#include <pokibot/poklegscom.h>
+#include "nav/nav.h"
 #include "pokdefs.h"
 
 LOG_MODULE_REGISTER(main);
@@ -41,7 +41,6 @@ int main(void)
 {
     LOG_INF("Pokibot main start");
 
-    poklegscom_set_break(1);
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {
         pokuicom_request(POKTOCOL_DATA_TYPE_TEAM);
@@ -57,8 +56,7 @@ int main(void)
     LOG_INF("Match started");
 
     pos2_t start_pos = {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0.0f};
-    poklegscom_set_pos(&start_pos);
-    poklegscom_set_break(0);
+    nav_set_pos(&start_pos);
 
     pos2_t waypoints[] = {
         {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI_2},
@@ -66,7 +64,16 @@ int main(void)
         {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 0.5f, .a = 3 * M_PI / 2},
         {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0},
     };
-    poklegscom_set_waypoints(waypoints, sizeof(waypoints) / sizeof(waypoints[0]));
+
+    uint32_t nav_events;
+    nav_go_to(&waypoints[0], K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to(&waypoints[1], K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to(&waypoints[2], K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to(&waypoints[3], K_FOREVER);
+    nav_wait_events(&nav_events);
 
     k_sleep(K_FOREVER);
     return 0;

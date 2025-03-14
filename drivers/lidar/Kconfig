@@ -10,4 +10,10 @@ config LIDAR_FHL_LD19
     default y
    	depends on DT_HAS_ZEPHYR_FHL_LD19_ENABLED
 
+config LIDAR_MSMLIDAR
+    bool "Enable msmlidar drivers"
+    default y
+   	depends on DT_HAS_POKIBOT_MSMLIDAR_ENABLED
+    select JSON_LIBRARY
+
 endif

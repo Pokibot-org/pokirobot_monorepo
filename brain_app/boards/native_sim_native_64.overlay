@@ -1,0 +1,13 @@
+
+/ {
+
+aliases {
+		mainlidar = &lidar;
+    };
+
+    lidar: lidar {
+        status = "okay";
+        compatible = "pokibot,msmlidar";
+        id = <0>;
+    };
+};

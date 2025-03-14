@@ -64,6 +64,15 @@ pos2_t pos2_add(const pos2_t a, const pos2_t b)
     return c;
 }
 
+pos2_t pos2_abs(const pos2_t a)
+{
+    pos2_t c = {
+        .x = fabsf(a.x),
+        .y = fabsf(a.y),
+        .a = fabsf(a.a),
+    };
+    return c;
+}
 
 float angle_modulo(float a)
 {

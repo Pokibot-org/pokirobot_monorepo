@@ -5,6 +5,7 @@ project(pokirobot_brain_soft)
 
 target_include_directories(app PRIVATE src)
 
-file(GLOB_RECURSE APP_SOURCES src/*.c)
-
-target_sources(app PRIVATE ${APP_SOURCES})
+target_sources(app PRIVATE
+    src/main.c
+    src/nav/nav.c
+)
