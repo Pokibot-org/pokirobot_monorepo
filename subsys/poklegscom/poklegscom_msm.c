@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(poklegscom);
 #define ROOT_TOPIC "poklegscom/0/"
 
 pos2_t current_pos;
+float current_dir;
 
 static int format_pos(char *buff, size_t buff_size, const pos2_t *pos) {
     return snprintf(buff, buff_size, "{\"x\": %f, \"y\": %f, \"a\": %f}", (double)pos->x, (double)pos->y, (double)pos->a);
@@ -44,6 +45,11 @@ int poklegscom_get_pos(pos2_t *pos) {
     return 0;
 }
 
+int poklegscom_get_dir(float *dir) {
+    *dir = current_dir;
+    return 0;
+}
+
 int poklegscom_set_break(bool state)
 {
     static char topic_buff[128];
@@ -57,6 +63,9 @@ void pos_clbk(char *data, int len, void *user_data) {
     sscanf(data, "%f %f %f", &current_pos.x, &current_pos.y, &current_pos.a);
 }
 
+void dir_clbk(char *data, int len, void *user_data) {
+    sscanf(data, "%f", &current_dir);
+}
 
 int poklegscom_init(void)
 {
@@ -66,6 +75,12 @@ int poklegscom_init(void)
         .clbk = pos_clbk
     };
     msm_topic_register(&topic);
+
+    static struct msm_topic dir_topic = {
+        .name = ROOT_TOPIC "dir",
+        .clbk = dir_clbk
+    };
+    msm_topic_register(&dir_topic);
 
     LOG_INF("init ok");
     return 0;

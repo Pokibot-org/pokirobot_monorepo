@@ -86,6 +86,7 @@ class Robot:
     def __init__(self, radius=0.19, team=0) -> None:
         self.radius = radius
         self.pos = np.array([0, 0, 0])
+        self.dir = 0
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
 
@@ -106,6 +107,16 @@ def draw_robot(screen, board: Board, robot: Robot):
     color = COLOR_TEAM_YELLOW if robot.team else COLOR_TEAM_BLUE
     pg.draw.circle(screen, (0,0,0), on_board_pos, on_board_radius)
     pg.draw.circle(screen, color, on_board_pos, on_board_radius * 0.9)
+    pg.draw.line(
+        screen,
+        COLOR_RED,
+        on_board_pos,
+        (
+            on_board_pos[0] + on_board_radius * math.cos(robot.dir),
+            on_board_pos[1] + on_board_radius * math.sin(robot.dir + math.pi),
+        ),
+        width=4,
+    )
     pg.draw.line(
         screen,
         COLOR_GRAY,
@@ -247,6 +258,13 @@ class PoklegscomSim(SimPart):
 
     def pos_publish(self, dt):
         self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
+        if self.wp_index < len(self.wps):
+            target = self.wps[self.wp_index]
+            target_pos = np.array([target[0], target[1]])
+            robot_pos = np.array([self.robot.pos[0], self.robot.pos[1]])
+            diff = target_pos - robot_pos
+            self.robot.dir = np.atan2(diff[1], diff[0])
+            self.poklegscom.send("dir", f"{self.robot.dir}")
 
 
 class LidarSim(SimPart):
