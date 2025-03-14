@@ -32,9 +32,9 @@ struct msmlidar_data {
 };
 
 struct json_lidar_point {
-    struct json_token angle;
-    struct json_token distance;
-    uint8_t intensity;
+    struct json_obj_token angle;
+    struct json_obj_token distance;
+    int32_t intensity;
 };
 
 static const struct json_obj_descr json_lidar_point_descr[] = {
@@ -96,24 +96,24 @@ static int msmlidar_register_callback(const struct device *dev, struct lidar_cal
     return 0;
 }
 
-static int decode_float(const struct json_token *token, float *num)
+static int decode_float(const struct json_obj_token *token, float *num)
 {
     char *endptr;
     char prev_end;
-
-    prev_end = *token->end;
-    *token->end = '\0';
+    char *token_end = token->start + token->length;
+    prev_end = *token_end;
+    *token_end = '\0';
 
     errno = 0;
     *num = strtof(token->start, &endptr);
 
-    *token->end = prev_end;
+    *token_end = prev_end;
 
     if (errno != 0) {
         return -errno;
     }
 
-    if (endptr != token->end) {
+    if (endptr != token_end) {
         return -EINVAL;
     }
 
@@ -124,13 +124,16 @@ void lidar_points_clbk(char *payload, int payload_len, void *user_data)
 {
     struct device *dev = (struct device *)user_data;
     struct msmlidar_data *data = dev->data;
+    int err;
 
     if (!data->started) {
         return;
     }
+
     struct json_lidar_points json_points;
-    if (json_arr_parse(payload, payload_len, json_lidar_points_descr, &json_points)) {
-        LOG_ERR("json parsing error");
+    err = json_arr_parse(payload, payload_len, json_lidar_points_descr, &json_points);
+    if (err < 0) {
+        LOG_ERR("json parsing error %d", err);
         return;
     }
     struct lidar_point points[MAX_LIDAR_POINTS];
