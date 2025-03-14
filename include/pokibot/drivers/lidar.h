@@ -20,7 +20,7 @@ struct lidar_point {
 };
 
 struct lidar_callback {
-    void (*clbk)(struct lidar_point *points, size_t nb_points, void *user_data);
+    void (*clbk)(const struct lidar_point *points, size_t nb_points, void *user_data);
 	void *user_data;
 
 	/** Internally used field for list handling */

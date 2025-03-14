@@ -125,6 +125,9 @@ void lidar_points_clbk(char *payload, int payload_len, void *user_data)
     struct device *dev = (struct device *)user_data;
     struct msmlidar_data *data = dev->data;
 
+    if (!data->started) {
+        return;
+    }
     struct json_lidar_points json_points;
     if (json_arr_parse(payload, payload_len, json_lidar_points_descr, &json_points)) {
         LOG_ERR("json parsing error");

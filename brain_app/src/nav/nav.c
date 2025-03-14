@@ -3,10 +3,16 @@
 #include <pokibot/poklegscom.h>
 #include <pokibot/lib/pokutils.h>
 #include <pokibot/poktypes.h>
+#include <pokibot/drivers/lidar.h>
 #include "nav.h"
+#include "zephyr/device.h"
+#include "zephyr/devicetree.h"
+#include <stddef.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nav);
+
+const struct device *lidar_dev = DEVICE_DT_GET(DT_ALIAS(mainlidar));
 
 K_EVENT_DEFINE(nav_events);
 K_THREAD_STACK_DEFINE(nav_workq_stack, 2048);
@@ -54,6 +60,11 @@ static void check_target_reached_work_handler(struct k_work *work) {
     k_work_reschedule_for_queue(&nav_workq, k_work_delayable_from_work(work), K_MSEC(1000/25));
 }
 
+void lidar_callback(const struct lidar_point *points, size_t nb_points, void* user_data)
+{
+    LOG_INF("Lidar clbk");
+}
+
 int nav_init(void) {
    	static struct k_work_queue_config cfg = {
 		.name = "nav_workq",
@@ -62,6 +73,11 @@ int nav_init(void) {
     k_work_queue_start(&nav_workq, nav_workq_stack,
 			   K_THREAD_STACK_SIZEOF(nav_workq_stack),
 			   8, &cfg);
+    static struct lidar_callback lidar_clbk = {
+        .clbk = lidar_callback,
+    };
+    lidar_register_callback(lidar_dev, &lidar_clbk);
+    lidar_start(lidar_dev);
 	return 0;
 }
 

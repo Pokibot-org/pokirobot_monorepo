@@ -294,17 +294,18 @@ class LidarSim(SimPart):
     def lidar_scan(self, dt):
         debug_point_list = []
         obstacle_shape = unary_union([obstacle.get_shape() for obstacle in self.world.obstacles])
-
+        to_send_point_list = []
         for i in range(self.resolution):
-            a = i/self.resolution * 2 * np.pi + self.robot.pos[2]
+            # Lidar is going clockwise that's why theres is a -
+            a = -i/self.resolution * 2 * np.pi + self.robot.pos[2]
             dir = [np.cos(a), np.sin(a)]
             robot_pos = Point(self.robot.pos[0:2])
             shapely_point = get_closest_collision_point(obstacle_shape, robot_pos , Point(dir))
             if shapely_point:
                 debug_point_list.append([shapely_point.x, shapely_point.y])
-                # robot_pos.distance(shapely_point)
+                to_send_point_list.append([-a, robot_pos.distance(shapely_point), 255])
         self.robot.lidar_points = debug_point_list
-        # self.msm.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
+        self.msm.send("lidar_points", json.dumps(to_send_point_list))
 
 
 class PokirobotSim(SimPart):
@@ -388,6 +389,6 @@ class PokibotGameSimulator:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     r = PokibotGameSimulator()
     r.run()
