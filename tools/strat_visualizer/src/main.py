@@ -292,6 +292,7 @@ class LidarSim(SimPart):
 
 
     def lidar_scan(self, dt):
+        quant = 3
         debug_point_list = []
         obstacle_shape = unary_union([obstacle.get_shape() for obstacle in self.world.obstacles])
         to_send_point_list = []
@@ -303,7 +304,7 @@ class LidarSim(SimPart):
             shapely_point = get_closest_collision_point(obstacle_shape, robot_pos , Point(dir))
             if shapely_point:
                 debug_point_list.append([shapely_point.x, shapely_point.y])
-                to_send_point_list.append({"angle": -a, "distance": robot_pos.distance(shapely_point), "intensity": 255})
+                to_send_point_list.append({"angle": round(-a, quant), "distance": round(robot_pos.distance(shapely_point), quant), "intensity": 255})
         self.robot.lidar_points = debug_point_list
         self.msm.send("lidar_points", json.dumps(to_send_point_list))
 

@@ -133,7 +133,7 @@ void lidar_points_clbk(char *payload, int payload_len, void *user_data)
     struct json_lidar_points json_points;
     err = json_arr_parse(payload, payload_len, json_lidar_points_descr, &json_points);
     if (err < 0) {
-        LOG_ERR("json parsing error %d", err);
+        LOG_ERR("json parsing error %d\npayload:\n%s", err, payload);
         return;
     }
     struct lidar_point points[MAX_LIDAR_POINTS];
