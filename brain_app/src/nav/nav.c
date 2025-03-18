@@ -6,9 +6,11 @@
 #include <pokibot/drivers/lidar.h>
 #include "nav.h"
 #include "pokdefs.h"
+#include "astar-jps/AStar.h"
 #include "zephyr/device.h"
 #include "zephyr/devicetree.h"
 #include <stddef.h>
+#include <string.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nav);
@@ -25,7 +27,14 @@ K_WORK_DELAYABLE_DEFINE(check_target_reached_work, check_target_reached_work_han
 static pos2_t target_pos;
 static bool current_obstacle_detected_state = false;
 
-pos2_t sensivity = {
+
+#define ASTAR_NODE_EMPTY 1
+#define ASTAR_NODE_FULL  0
+#define GRID_SIZE_Y 20
+#define GRID_SIZE_X 30
+static char astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
+
+static const pos2_t sensivity = {
     .x = 0.01f,
     .y = 0.01f,
     .a = DEG_TO_RAD(2),
@@ -36,12 +45,49 @@ int nav_set_pos(const pos2_t *pos)
     return poklegscom_set_pos(pos);
 }
 
+static int go_to_with_pathfinding(const pos2_t *target_pos)
+{
+    int sol_length;
+    pos2_t robot_pos;
+    poklegscom_get_pos(&robot_pos);
+    LOG_INF("from{.x=%.2f, .y=%.2f}", (double)robot_pos.x, (double)robot_pos.y);
+    LOG_INF("to{.x=%.2f, .y=%.2f}", (double)target_pos->x, (double)target_pos->y);
+    int start = astar_getIndexByWidth(GRID_SIZE_X, (robot_pos.x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X,
+                                      (robot_pos.y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y);
+    int end = astar_getIndexByWidth(GRID_SIZE_X, (target_pos->x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X,
+                                    (target_pos->y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y);
+    LOG_INF("Indexes start %d | end %d", start, end);
+
+    int *indexes =
+        astar_compute((char *)astar_grid, &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
+    LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
+    if (!indexes) {
+        LOG_ERR("Error in astar_compute");
+        poklegscom_set_waypoints(target_pos, 1);
+        return 0;
+    }
+    pos2_t *wps = k_malloc(sizeof(pos2_t) * sol_length);
+    for (int i = 0; i < sol_length; i++) {
+        int x, y;
+        int node_index = sol_length - i - 1;
+        astar_getCoordByWidth(GRID_SIZE_X, indexes[i], &x, &y);
+        wps[node_index].a = robot_pos.a;
+        wps[node_index].x = (float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X;
+        wps[node_index].y = (float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y;
+    }
+    k_free(indexes);
+    wps[sol_length - 1] = *target_pos;
+    poklegscom_set_waypoints(wps, sol_length);
+    k_free(wps);
+    return 0;
+}
+
 int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
 {
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
     poklegscom_set_break(0);
-    poklegscom_set_waypoints(pos, 1);
+    go_to_with_pathfinding(pos);
     k_work_schedule(&check_target_reached_work, K_NO_WAIT);
     return 0;
 }
@@ -71,6 +117,8 @@ void update_obstacle_detection_state(bool obstacle_detected)
         if (obstacle_detected) {
             LOG_INF("Obstacle detected");
             poklegscom_set_break(1);
+            // go_to_with_pathfinding(&target_pos);
+            // must be called elsewhere
         } else {
             LOG_INF("No obstacle detected");
             poklegscom_set_break(0);
@@ -126,6 +174,9 @@ int nav_init(void)
     static struct k_work_queue_config cfg = {
         .name = "nav_workq",
     };
+
+    memset(astar_grid, ASTAR_NODE_EMPTY, sizeof(astar_grid));
+
     poklegscom_set_break(1);
     k_work_queue_start(&nav_workq, nav_workq_stack, K_THREAD_STACK_SIZEOF(nav_workq_stack), 8,
                        &cfg);

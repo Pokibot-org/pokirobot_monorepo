@@ -5,6 +5,10 @@
 #include <math.h>
 
 #include <zephyr/sys/util.h>
+#include <zephyr/kernel.h>
+
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(astar);
 
 #define SQUARE(arg) ((arg) * (arg))
 
@@ -280,7 +284,10 @@ static int jump (astar_t *astar, direction dir, int start)
 	coord_t coord = adjustInDirection (getCoord (astar->bounds, start), dir);
 	int node = getIndex (astar->bounds, coord);
 	if (!isEnterable (astar, coord))
+	{
+	    LOG_DBG("Cant enter node {.x = %d, .y = %d}", coord.x, coord.y);
 		return -1;
+	}
 
 	if (node == astar->goal ||
 	    forcedNeighbours (astar, coord, dir)) {
@@ -331,7 +338,7 @@ static int *recordSolution (astar_t *astar)
 	int rvLen = 1;
 	*astar->solutionLength = 0;
 	int target = astar->goal;
-	int *rv = malloc (rvLen * sizeof (int));
+	int *rv = k_malloc (rvLen * sizeof (int));
 	int i = astar->goal;
 
 	for (;;) {
@@ -340,7 +347,7 @@ static int *recordSolution (astar_t *astar)
 		(*astar->solutionLength)++;
 		if (*astar->solutionLength >= rvLen) {
 			rvLen *= 2;
-			rv = realloc (rv, rvLen * sizeof (int));
+			rv = k_realloc (rv, rvLen * sizeof (int));
 			if (!rv)
 				return NULL;
 		}
@@ -417,24 +424,24 @@ static int init_astar_object (astar_t* astar, const char *grid, int *solLength, 
 	if (!astar->open)
 		return 0;
 
-	astar->closed = malloc (size);
+	astar->closed = k_malloc (size);
 	if (!astar->closed) {
 		freeQueue (astar->open);
 		return 0;
 	}
 
-	astar->gScores = malloc (size * sizeof (float));
+	astar->gScores = k_malloc (size * sizeof (float));
 	if (!astar->gScores) {
 		freeQueue (astar->open);
-		free (astar->closed);
+		k_free (astar->closed);
 		return 0;
 	}
 
-	astar->cameFrom = malloc (size * sizeof (int));
+	astar->cameFrom = k_malloc (size * sizeof (int));
 	if (!astar->cameFrom) {
 		freeQueue (astar->open);
-		free (astar->closed);
-		free (astar->gScores);
+		k_free (astar->closed);
+		k_free (astar->gScores);
 		return 0;
 	}
 
@@ -458,7 +465,10 @@ int *astar_compute (const char *grid,
 {
 	astar_t astar;
 	if (!init_astar_object (&astar, grid, solLength, boundX, boundY, start, end))
+	{
+	    LOG_ERR("Error during init");
 		return NULL;
+	}
 
 	coord_t bounds = {boundX, boundY};
 	coord_t endCoord = getCoord (bounds, end);
@@ -466,14 +476,15 @@ int *astar_compute (const char *grid,
 	while (astar.open->size) {
 		int node = findMin (astar.open)->value;
 		coord_t nodeCoord = getCoord (bounds, node);
+		LOG_DBG("Current node: {.x = %d, .y = %d}", nodeCoord.x, nodeCoord.y);
 		if (nodeCoord.x == endCoord.x && nodeCoord.y == endCoord.y) {
 			freeQueue (astar.open);
-			free (astar.closed);
-			free (astar.gScores);
+			k_free (astar.closed);
+			k_free (astar.gScores);
 
 			int *rv = recordSolution (&astar);
 
-			free (astar.cameFrom);
+			k_free (astar.cameFrom);
 
 			return rv;
 		}
@@ -493,6 +504,7 @@ int *astar_compute (const char *grid,
 		{
 			int newNode = jump (&astar, dir, node);
 			coord_t newCoord = getCoord (bounds, newNode);
+			LOG_DBG("Potential next node: %d {.x = %d, .y = %d}", newNode, newCoord.x, newCoord.y);
 
 			// this'll also bail out if jump() returned -1
 			if (!contained (bounds, newCoord))
@@ -506,66 +518,10 @@ int *astar_compute (const char *grid,
 		}
 	}
 	freeQueue (astar.open);
-	free (astar.closed);
-	free (astar.gScores);
-	free (astar.cameFrom);
+	k_free (astar.closed);
+	k_free (astar.gScores);
+	k_free (astar.cameFrom);
+	LOG_ERR("No path availiable");
 
-	return NULL;
-}
-
-
-
-int *astar_unopt_compute (const char *grid,
-		    int *solLength,
-		    int boundX,
-		    int boundY,
-		    int start,
-		    int end)
-{
-	astar_t astar;
-
-	if (!init_astar_object (&astar, grid, solLength, boundX, boundY, start, end))
-		return NULL;
-
-	coord_t bounds = {boundX, boundY};
-	coord_t endCoord = getCoord (bounds, end);
-
-	while (astar.open->size) {
-		int node = findMin (astar.open)->value;
-		coord_t nodeCoord = getCoord (bounds, node);
-		if (nodeCoord.x == endCoord.x && nodeCoord.y == endCoord.y) {
-			freeQueue (astar.open);
-			free (astar.closed);
-			free (astar.gScores);
-
-			int *rv = recordSolution (&astar);
-
-			free (astar.cameFrom);
-
-			return rv;
-		}
-
-		deleteMin (astar.open);
-		astar.closed[node] = 1;
-
-		for (int dir = 0; dir < 8; dir++)
-		{
-			coord_t newCoord = adjustInDirection (nodeCoord, dir);
-			int newNode = getIndex (bounds, newCoord);
-
-			if (!contained (bounds, newCoord) || !grid[newNode])
-				continue;
-
-			if (astar.closed[newNode])
-				continue;
-
-			addToOpenSet (&astar, newNode, node);
-
-		}
-	}
-	freeQueue (astar.open);
-	free (astar.closed);
-	free (astar.gScores);
-	free (astar.cameFrom);
 	return NULL;
 }

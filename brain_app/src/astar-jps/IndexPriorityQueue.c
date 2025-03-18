@@ -1,7 +1,9 @@
 #include "IndexPriorityQueue.h"
-#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
+#include <zephyr/kernel.h>
+
 
 int smallestPowerOfTwoAfter (int x)
 {
@@ -22,9 +24,9 @@ int makeSpace (queue *q, size_t size)
         if (newAllocated <= q->allocated)
                 return 0;
 
-        q->root = realloc (q->root, newAllocated);
+        q->root = k_realloc (q->root, newAllocated);
         if (NULL == q->root)
-                exit (1); // I'm a bloody Haskell programmer, I don't have any business trying to do anything fancy when realloc fails
+                k_panic();
 
         q->allocated = newAllocated;
         return newAllocated;
@@ -66,9 +68,9 @@ void insert (queue *q, int value, float pri)
         int newAllocated = smallestPowerOfTwoAfter ((value + 1) * sizeof(int));
 
         if ((value + 1) * sizeof (int) > q->indexAllocated) {
-		q->index = realloc (q->index, newAllocated);
+		q->index = k_realloc (q->index, newAllocated);
 		if (NULL == q->index)
-			exit (1);
+			k_panic();
 		for (unsigned int j = q->indexAllocated / sizeof (int); j < newAllocated / sizeof (int); j++)
 			q->index[j] = -1;
 		q->indexAllocated = newAllocated;
@@ -155,9 +157,9 @@ int exists (const queue *q, int ind)
 
 queue* createQueue ()
 {
-	queue *rv = (queue*) malloc (sizeof (queue));
+	queue *rv = (queue*) k_malloc (sizeof (queue));
 	if (NULL == rv)
-		exit (1);
+		k_panic();
 	rv->size = 0;
 	rv->allocated = 0;
 	rv->root = NULL;
@@ -168,7 +170,7 @@ queue* createQueue ()
 
 void freeQueue (queue* q)
 {
-	free (q->root);
-	free (q->index);
-	free (q);
+	k_free (q->root);
+	k_free (q->index);
+	k_free (q);
 }
