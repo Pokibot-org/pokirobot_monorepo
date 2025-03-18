@@ -36,6 +36,6 @@ float vec2_distance(point2_t a, point2_t b);
 pos2_t pos2_diff(const pos2_t target, const pos2_t orig);
 pos2_t pos2_add(const pos2_t a, const pos2_t b);
 pos2_t pos2_abs(const pos2_t a);
-float angle_modulo_zero_centered(float a);
+float angle_normalize(float a);
 
 #endif // POKUTILS_H

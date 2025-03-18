@@ -298,13 +298,14 @@ class LidarSim(SimPart):
         to_send_point_list = []
         for i in range(self.resolution):
             # Lidar is going clockwise that's why theres is a -
-            a = -i/self.resolution * 2 * np.pi + self.robot.pos[2]
-            dir = [np.cos(a), np.sin(a)]
+            lidar_angle = i/self.resolution * 2 * np.pi
+            table_angle = -lidar_angle + self.robot.pos[2]
+            dir = [np.cos(table_angle), np.sin(table_angle)]
             robot_pos = Point(self.robot.pos[0:2])
             shapely_point = get_closest_collision_point(obstacle_shape, robot_pos , Point(dir))
             if shapely_point:
                 debug_point_list.append([shapely_point.x, shapely_point.y])
-                to_send_point_list.append({"angle": round(-a, quant), "distance": round(robot_pos.distance(shapely_point), quant), "intensity": 255})
+                to_send_point_list.append({"angle": round(lidar_angle, quant), "distance": round(robot_pos.distance(shapely_point), quant), "intensity": 255})
         self.robot.lidar_points = debug_point_list
         self.msm.send("lidar_points", json.dumps(to_send_point_list))
 

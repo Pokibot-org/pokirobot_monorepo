@@ -5,6 +5,7 @@
 #include <pokibot/poktypes.h>
 #include <pokibot/drivers/lidar.h>
 #include "nav.h"
+#include "pokdefs.h"
 #include "zephyr/device.h"
 #include "zephyr/devicetree.h"
 #include <stddef.h>
@@ -63,16 +64,27 @@ static void check_target_reached_work_handler(struct k_work *work) {
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void* user_data)
 {
     LOG_INF("Lidar clbk");
-    float dir;
-    pos2_t pos;
-    poklegscom_get_dir(&dir);
-    poklegscom_get_pos(&pos);
+    float robot_dir;
+    pos2_t robot_pos;
+    poklegscom_get_dir(&robot_dir);
+    poklegscom_get_pos(&robot_pos);
 
     for (size_t i=0; i<nb_points; i++) {
         const struct lidar_point *point = &points[i];
-        float point_dir = angle_modulo_zero_centered(-point->angle + pos.a);
-        // pos2_t point_pos =
-        // if (fabsf(angle_modulo_zero_centered(point_dir)))
+        float point_dir_robot_ref = angle_normalize(-point->angle);
+        float point_dir_table_ref = angle_normalize(point_dir_robot_ref - robot_pos.a);
+        float angle_dist_point_to_robot_dir = fabsf(angle_normalize(point_dir_table_ref-robot_dir));
+        // LOG_INF("robot_pos.a: %.2f", (double)RAD_TO_DEG(robot_pos.a));
+        // LOG_INF("robot_dir: %.2f", (double)RAD_TO_DEG(robot_dir));
+        // LOG_INF("point_dir_robot_ref: %.2f", (double)RAD_TO_DEG(point_dir_robot_ref));
+        // LOG_INF("point_dir_table_ref: %.2f", (double)RAD_TO_DEG(point_dir_table_ref));
+        // LOG_INF("angle_dist_point_to_robot_dir %.2f", (double)RAD_TO_DEG(angle_dist_point_to_robot_dir));
+        // LOG_INF("point->angle %.2f", (double)RAD_TO_DEG(point->angle));
+        // LOG_INF("point->distance %.2f", (double)point->distance);
+        if (angle_dist_point_to_robot_dir < LIDAR_STOP_ANGLE/2 && point->distance < LIDAR_STOP_DISTANCE) {
+            // poklegscom_set_break(0);
+            LOG_INF("BREAK");
+        }
     }
 }
 
