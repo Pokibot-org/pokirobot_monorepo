@@ -74,7 +74,7 @@ pos2_t pos2_abs(const pos2_t a)
     return c;
 }
 
-float angle_modulo(float a)
+float angle_modulo_zero_centered(float a)
 {
     return fmodf(a + M_PI, 2 * M_PI) - M_PI;
 }

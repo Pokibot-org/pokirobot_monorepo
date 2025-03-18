@@ -63,6 +63,17 @@ static void check_target_reached_work_handler(struct k_work *work) {
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void* user_data)
 {
     LOG_INF("Lidar clbk");
+    float dir;
+    pos2_t pos;
+    poklegscom_get_dir(&dir);
+    poklegscom_get_pos(&pos);
+
+    for (size_t i=0; i<nb_points; i++) {
+        const struct lidar_point *point = &points[i];
+        float point_dir = angle_modulo_zero_centered(-point->angle + pos.a);
+        // pos2_t point_pos =
+        // if (fabsf(angle_modulo_zero_centered(point_dir)))
+    }
 }
 
 int nav_init(void) {
