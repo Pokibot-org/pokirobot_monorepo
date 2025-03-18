@@ -57,7 +57,7 @@ void siftUp (queue *q, int i)
 	return siftUp (q, p);
 }
 
-void insert (queue *q, int value, double pri)
+void insert (queue *q, int value, float pri)
 {
 	item i;
 	i.value = value;
@@ -76,7 +76,7 @@ void insert (queue *q, int value, double pri)
 
 	int p = placeAtEnd (q, i);
 
-	q->index[q->root[p].value] = p;	
+	q->index[q->root[p].value] = p;
 
 	siftUp (q, p);
 }
@@ -118,14 +118,14 @@ void deleteMin (queue *q)
 	q->root[0] = q->root[q->size];
 
 	siftDown (q, 0);
-} 
+}
 
 item *findMin (const queue *q)
 {
 	return q->root;
 }
 
-void changePriority (queue *q, int ind, double newPriority)
+void changePriority (queue *q, int ind, float newPriority)
 {
 	int oldPriority = q->root[q->index[ind]].priority;
 	q->root[q->index[ind]].priority = newPriority;
@@ -149,7 +149,7 @@ int priorityOf (const queue *q, int ind)
 int exists (const queue *q, int ind)
 {
 	return  (q->indexAllocated / sizeof (int) > ind) &&
-		(-1 != q->index[ind]) && 
+		(-1 != q->index[ind]) &&
 		(q->size > q->index[ind]);
 }
 
@@ -172,4 +172,3 @@ void freeQueue (queue* q)
 	free (q->index);
 	free (q);
 }
-

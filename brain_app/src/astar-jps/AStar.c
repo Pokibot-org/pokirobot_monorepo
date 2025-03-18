@@ -4,12 +4,17 @@
 #include <string.h>
 #include <math.h>
 
+#include <zephyr/sys/util.h>
+
+#define SQUARE(arg) ((arg) * (arg))
+
+
 // Distance metrics, you might want to change these to match your game mechanics
 
 // Chebyshev distance metric for distance estimation by default
-static double estimateDistance (coord_t start, coord_t end)
+static float estimateDistance (coord_t start, coord_t end)
 {
-	return fmax (abs (start.x - end.x), abs (start.y - end.y));
+	return MAX(abs (start.x - end.x), abs (start.y - end.y));
 }
 
 // Since we only work on uniform-cost maps, this function only needs
@@ -18,11 +23,11 @@ static double estimateDistance (coord_t start, coord_t end)
 // Note that since we jump over points, we actually have to compute
 // the entire distance - despite the uniform cost we can't just collapse
 // all costs to 1
-static double preciseDistance (coord_t start, coord_t end)
+static float preciseDistance (coord_t start, coord_t end)
 {
 	if (start.x - end.x != 0 && start.y - end.y != 0)
-		return sqrt (pow (start.x - end.x, 2) +
-			     pow (start.y - end.y, 2)) ;
+		return sqrtf (SQUARE(start.x - end.x) +
+			     SQUARE(start.y - end.y)) ;
 	else
 		return abs (start.x - end.x) + abs (start.y - end.y);
 }
@@ -38,7 +43,7 @@ typedef struct astar {
 	node goal;
 	queue *open;
 	char *closed;
-	double *gScores;
+	float *gScores;
 	node *cameFrom;
 	int *solutionLength;
 } astar_t;
@@ -261,7 +266,7 @@ static void addToOpenSet (astar_t *astar,
 		int oldGScore = astar->gScores[node];
 		astar->gScores[node] = astar->gScores[nodeFrom] +
 			preciseDistance (nodeFromCoord, nodeCoord);
-		double newPri = priorityOf (astar->open, node)
+		float newPri = priorityOf (astar->open, node)
 			- oldGScore
 			+ astar->gScores[node];
 		changePriority (astar->open, node, newPri);
@@ -418,7 +423,7 @@ static int init_astar_object (astar_t* astar, const char *grid, int *solLength, 
 		return 0;
 	}
 
-	astar->gScores = malloc (size * sizeof (double));
+	astar->gScores = malloc (size * sizeof (float));
 	if (!astar->gScores) {
 		freeQueue (astar->open);
 		free (astar->closed);
