@@ -86,8 +86,18 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void* us
     for (size_t i=0; i<nb_points; i++) {
         const struct lidar_point *point = &points[i];
         float point_dir_robot_ref = angle_normalize(-point->angle);
-        float point_dir_table_ref = angle_normalize(point_dir_robot_ref - robot_pos.a);
+        float point_dir_table_ref = angle_normalize(point_dir_robot_ref + robot_pos.a);
         float angle_dist_point_to_robot_dir = fabsf(angle_normalize(point_dir_table_ref-robot_dir));
+        point2_t lidar_point2 = {
+            .x = cosf(point_dir_table_ref) * point->distance + robot_pos.x,
+            .y = sinf(point_dir_table_ref) * point->distance + robot_pos.y,
+        };
+        // LOG_INF("lidar_point2{.x=%.2f, .y=%.2f}", (double)lidar_point2.x, (double)lidar_point2.y);
+        const point2_t board_min = (point2_t){.x = BOARD_MIN_X, .y = BOARD_MIN_Y};
+        const point2_t board_max = (point2_t){.x = BOARD_MAX_X, .y = BOARD_MAX_Y};
+        if (!(POINT2_COMPARE(lidar_point2, >=, board_min) && POINT2_COMPARE(lidar_point2, <=, board_max))) {
+            continue;
+        }
         // LOG_INF("robot_pos.a: %.2f", (double)RAD_TO_DEG(robot_pos.a));
         // LOG_INF("robot_dir: %.2f", (double)RAD_TO_DEG(robot_dir));
         // LOG_INF("point_dir_robot_ref: %.2f", (double)RAD_TO_DEG(point_dir_robot_ref));

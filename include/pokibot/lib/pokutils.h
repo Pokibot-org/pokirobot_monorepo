@@ -26,6 +26,8 @@
     (((pos_a).x operator(pos_b).x) && ((pos_a).y operator(pos_b).y) &&                             \
      ((pos_a).a operator(pos_b).a))
 
+#define POINT2_COMPARE(a, operator, b) (((a).x operator(b).x) && ((a).y operator(b).y))
+
 vec2_t point2_diff(const point2_t terminal, const point2_t initial);
 vec2_t vec2_normalize(vec2_t vec);
 float vec2_abs(vec2_t vec);
