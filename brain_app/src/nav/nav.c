@@ -23,6 +23,7 @@ static void check_target_reached_work_handler(struct k_work *work);
 K_WORK_DELAYABLE_DEFINE(check_target_reached_work, check_target_reached_work_handler);
 
 static pos2_t target_pos;
+static bool current_obstacle_detected_state = false;
 
 pos2_t sensivity = {
     .x = 0.01f,
@@ -61,14 +62,27 @@ static void check_target_reached_work_handler(struct k_work *work) {
     k_work_reschedule_for_queue(&nav_workq, k_work_delayable_from_work(work), K_MSEC(1000/25));
 }
 
+void update_obstacle_detection_state(bool obstacle_detected) {
+    if (current_obstacle_detected_state != obstacle_detected) {
+        current_obstacle_detected_state = obstacle_detected;
+        if (obstacle_detected) {
+            LOG_INF("Obstacle detected");
+            poklegscom_set_break(1);
+        } else {
+            LOG_INF("No obstacle detected");
+            poklegscom_set_break(0);
+        }
+    }
+}
+
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void* user_data)
 {
-    LOG_INF("Lidar clbk");
     float robot_dir;
     pos2_t robot_pos;
     poklegscom_get_dir(&robot_dir);
     poklegscom_get_pos(&robot_pos);
 
+    bool obstacle_detected = false;
     for (size_t i=0; i<nb_points; i++) {
         const struct lidar_point *point = &points[i];
         float point_dir_robot_ref = angle_normalize(-point->angle);
@@ -81,11 +95,12 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void* us
         // LOG_INF("angle_dist_point_to_robot_dir %.2f", (double)RAD_TO_DEG(angle_dist_point_to_robot_dir));
         // LOG_INF("point->angle %.2f", (double)RAD_TO_DEG(point->angle));
         // LOG_INF("point->distance %.2f", (double)point->distance);
-        if (angle_dist_point_to_robot_dir < LIDAR_STOP_ANGLE/2 && point->distance < LIDAR_STOP_DISTANCE) {
-            // poklegscom_set_break(0);
-            LOG_INF("BREAK");
+        bool obstacle_close = angle_dist_point_to_robot_dir < LIDAR_STOP_ANGLE/2 && point->distance < LIDAR_STOP_DISTANCE;
+        if (obstacle_close) {
+            obstacle_detected = true;
         }
     }
+    update_obstacle_detection_state(obstacle_detected);
 }
 
 int nav_init(void) {
