@@ -21,6 +21,7 @@ logger = logging.getLogger("strat_visu")
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
 COLOR_DEEPBLACK = (0, 0, 0)
+COLOR_BLACK = (0x33, 0x33, 0x33)
 COLOR_RED = (0xE3, 0x65, 0x5B)
 COLOR_YELLOW = (0xCF, 0xD1, 0x86)
 COLOR_GREEN = (0x5B, 0x8C, 0x5A)
@@ -72,6 +73,14 @@ class CircleObstacle(Obstacle):
         self.pos = pos
         self.radius = radius
         shape = Point(pos[0], pos[1]).buffer(radius)
+        super().__init__(shape)
+
+class RobotObstacle(Obstacle):
+    def __init__(self, pos, radius, scan_radius=0.035) -> None:
+        self.pos = pos
+        self.radius = radius
+        self.scan_radius = scan_radius
+        shape = Point(pos[0], pos[1]).buffer(scan_radius)
         super().__init__(shape)
 
 class Board:
@@ -136,6 +145,14 @@ def draw_obstacle(screen, board: Board, obstacle: Obstacle):
         on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
         pg.draw.circle(screen, COLOR_DEEPBLACK, on_board_pos, on_board_radius)
         pg.draw.circle(screen, COLOR_GREEN, on_board_pos, on_board_radius*0.98)
+    elif type(obstacle) is RobotObstacle:
+        on_board_radius = obstacle.radius * ratio
+        on_board_scan_radius = obstacle.scan_radius * ratio
+        on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
+        pg.draw.circle(screen, COLOR_DEEPBLACK, on_board_pos, on_board_radius)
+        pg.draw.circle(screen, COLOR_GREEN, on_board_pos, on_board_radius*0.98)
+        pg.draw.circle(screen, COLOR_BLACK, on_board_pos, on_board_scan_radius)
+
 
 def draw_debug_point(screen, board: Board, pos, radius=0.01, color=COLOR_RED):
     ratio = board.dim_x[1] / board.real_size[0]
@@ -325,7 +342,7 @@ class PokibotGameSimulator:
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
-        self.world = World(obstacles=[CircleObstacle([0, 1.5], 0.2)])
+        self.world = World(obstacles=[RobotObstacle([0, 1.5], 0.2)])
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
 
