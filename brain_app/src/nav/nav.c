@@ -24,8 +24,16 @@ static struct k_work_q nav_workq;
 static void check_target_reached_work_handler(struct k_work *work);
 K_WORK_DELAYABLE_DEFINE(check_target_reached_work, check_target_reached_work_handler);
 
-static pos2_t target_pos;
+// TODO: can be transformed in a hander for all nav events with a proper state machine
+static void recompute_path_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(recompute_path_work, recompute_path_work_handler);
+
+static void timeout_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(timeout_work, timeout_work_handler);
+
 static bool current_obstacle_detected_state = false;
+static pos2_t target_pos;
+bool had_a_target_pos = false;
 
 
 #define ASTAR_NODE_EMPTY 1
@@ -73,8 +81,14 @@ int nav_set_pos(const pos2_t *pos)
     return poklegscom_set_pos(pos);
 }
 
+int nav_set_break(bool status)
+{
+    return poklegscom_set_break(status);
+}
+
 static int go_to_with_pathfinding(const pos2_t *target_pos)
 {
+    uint32_t start_time = k_uptime_get_32();
     int sol_length;
     pos2_t robot_pos;
     poklegscom_get_pos(&robot_pos);
@@ -86,6 +100,7 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
 
     int *indexes =
         astar_compute((char *)astar_grids[current_astar_grid], &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
+    LOG_INF("Compute A* in %dms", k_uptime_get_32() - start_time);
     LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
     if (!indexes) {
         LOG_ERR("Error in astar_compute");
@@ -93,7 +108,20 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
         log_astar_grid();
         return 0;
     }
+    if (sol_length == 0) {
+        LOG_WRN("Already at destination");
+        if (indexes) {
+            k_free(indexes);
+        }
+        poklegscom_set_waypoints(target_pos, 1);
+        return 0;
+    }
     pos2_t *wps = k_malloc(sizeof(pos2_t) * sol_length);
+    if (!wps) {
+        LOG_ERR("wps malloc failed");
+        k_free(indexes);
+        return -1;
+    }
     for (int i = 0; i < sol_length; i++) {
         int x, y;
         int node_index = sol_length - i - 1;
@@ -106,16 +134,38 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
     wps[sol_length - 1] = *target_pos;
     poklegscom_set_waypoints(wps, sol_length);
     k_free(wps);
+    LOG_INF("go_to_with_pathfinding in %dms", k_uptime_get_32() - start_time);
     return 0;
+}
+
+static void nav_stop_all(void) {
+    struct k_work_sync sync;
+    k_work_cancel_delayable_sync(&check_target_reached_work, &sync);
+    k_work_cancel_delayable_sync(&recompute_path_work, &sync);
+    k_work_cancel_delayable_sync(&timeout_work, &sync);
+    k_event_clear(&nav_events, 0xFFFFFFFF);
 }
 
 int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
 {
-    k_event_clear(&nav_events, 0xFFFFFFFF);
+    nav_stop_all();
     target_pos = *pos;
-    poklegscom_set_break(0);
+    had_a_target_pos = true;
     go_to_with_pathfinding(pos);
-    k_work_schedule(&check_target_reached_work, K_NO_WAIT);
+    k_work_schedule_for_queue(&nav_workq, &recompute_path_work, K_MSEC(1000));
+    k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
+    k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
+    return 0;
+}
+
+int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout)
+{
+    nav_stop_all();
+    target_pos = *pos;
+    had_a_target_pos = true;
+    poklegscom_set_waypoints(pos, 1);
+    k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
+    k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
     return 0;
 }
 
@@ -131,21 +181,38 @@ static void check_target_reached_work_handler(struct k_work *work)
     pos2_t diff = pos2_abs(pos2_diff(current_pos, target_pos));
     if (POS2_COMPARE(diff, <, sensivity)) {
         LOG_INF("Target reached");
+        had_a_target_pos = false;
         k_event_set(&nav_events, NAV_EVENT_DESTINATION_REACHED);
+        k_work_cancel_delayable(&recompute_path_work);
+        k_work_cancel_delayable(&timeout_work);
         return;
     }
     k_work_reschedule_for_queue(&nav_workq, k_work_delayable_from_work(work), K_MSEC(1000 / 25));
+}
+
+static void recompute_path_work_handler(struct k_work *work)
+{
+    LOG_INF("Recompute path");
+    go_to_with_pathfinding(&target_pos);
+    k_work_reschedule_for_queue(&nav_workq, k_work_delayable_from_work(work), K_MSEC(1000));
+}
+
+static void timeout_work_handler(struct k_work *work)
+{
+    LOG_INF("Timeout");
+    k_event_set(&nav_events, NAV_EVENT_TIMEOUT);
 }
 
 void update_obstacle_detection_state(bool obstacle_detected)
 {
     if (current_obstacle_detected_state != obstacle_detected) {
         current_obstacle_detected_state = obstacle_detected;
+        if (!had_a_target_pos) {
+            return;
+        }
         if (obstacle_detected) {
             LOG_INF("Obstacle detected");
             poklegscom_set_break(1);
-            // go_to_with_pathfinding(&target_pos);
-            // must be called elsewhere
         } else {
             LOG_INF("No obstacle detected");
             poklegscom_set_break(0);

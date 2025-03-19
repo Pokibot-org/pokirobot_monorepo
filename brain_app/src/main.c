@@ -58,6 +58,8 @@ int main(void)
     pos2_t start_pos = {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0.0f};
     nav_set_pos(&start_pos);
 
+    nav_set_break(false);
+
     pos2_t waypoints[] = {
         {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI_2},
         {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI},
