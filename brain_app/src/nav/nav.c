@@ -48,15 +48,16 @@ static const pos2_t sensivity = {
 
 static void log_astar_grid(void) {
     char *current_grid = astar_grids[current_astar_grid];
-    char line[GRID_SIZE_X + 1];
+    char line[GRID_SIZE_X * 2 + 1];
+    memset(line, ' ', sizeof(line));
     line[GRID_SIZE_X] = '\0';
     for (int y = 0; y < GRID_SIZE_Y; y++) {
         for (int x = 0; x < GRID_SIZE_X; x++) {
             int index = astar_getIndexByWidth(GRID_SIZE_X, x, GRID_SIZE_Y - y - 1);
             if (current_grid[index] == ASTAR_NODE_FULL) {
-                line[x] = '1';
+                line[x*2] = '1';
             } else {
-                line[x] = '0';
+                line[x*2] = '0';
             }
         }
         LOG_INF("%s", line);
