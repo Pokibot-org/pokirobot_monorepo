@@ -30,14 +30,15 @@ static bool current_obstacle_detected_state = false;
 
 #define ASTAR_NODE_EMPTY 1
 #define ASTAR_NODE_FULL  0
-#define GRID_SIZE_Y 20
-#define GRID_SIZE_X 30
+#define GRID_SIZE_Y 21
+#define GRID_SIZE_X 31
 #define BOARD_BORDER_MARGIN  ROBOT_RADIUS
+#define OBSTACLE_MARGIN      (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS)
 
-#define BOARD_TO_ASTAR_GRID_X(x) (MIN(MAX((int)((x - BOARD_MIN_X + BOARD_BORDER_MARGIN) * GRID_SIZE_X / BOARD_SIZE_X), 0), GRID_SIZE_X))
-#define BOARD_TO_ASTAR_GRID_Y(y) (MIN(MAX((int)((y - BOARD_MIN_Y + BOARD_BORDER_MARGIN) * GRID_SIZE_Y / BOARD_SIZE_Y), 0), GRID_SIZE_Y))
-#define ASTAR_GRID_TO_BOARD_X(x) ((float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X - BOARD_BORDER_MARGIN)
-#define ASTAR_GRID_TO_BOARD_Y(y) ((float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y - BOARD_BORDER_MARGIN)
+#define BOARD_TO_ASTAR_GRID_X(x) (MIN(MAX((int)((x - BOARD_MIN_X - BOARD_BORDER_MARGIN) * (GRID_SIZE_X-1) / (BOARD_SIZE_X - 2*BOARD_BORDER_MARGIN)), 0), GRID_SIZE_X-1))
+#define BOARD_TO_ASTAR_GRID_Y(y) (MIN(MAX((int)((y - BOARD_MIN_Y - BOARD_BORDER_MARGIN) * (GRID_SIZE_Y-1) / (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN)), 0), GRID_SIZE_Y-1))
+#define ASTAR_GRID_TO_BOARD_X(x) ((float)x * (BOARD_SIZE_X - 2*BOARD_BORDER_MARGIN) / (GRID_SIZE_X-1) + BOARD_MIN_X + BOARD_BORDER_MARGIN)
+#define ASTAR_GRID_TO_BOARD_Y(y) ((float)y * (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN) / (GRID_SIZE_Y-1) + BOARD_MIN_Y + BOARD_BORDER_MARGIN)
 
 static char astar_grids[2][GRID_SIZE_Y * GRID_SIZE_X];
 static int current_astar_grid = 0;
@@ -53,6 +54,7 @@ static void log_astar_grid(void) {
     char line[GRID_SIZE_X * 2 + 1];
     memset(line, ' ', sizeof(line));
     line[GRID_SIZE_X] = '\0';
+    LOG_INF("A* grid:");
     for (int y = 0; y < GRID_SIZE_Y; y++) {
         for (int x = 0; x < GRID_SIZE_X; x++) {
             int index = astar_getIndexByWidth(GRID_SIZE_X, x, GRID_SIZE_Y - y - 1);
@@ -151,6 +153,19 @@ void update_obstacle_detection_state(bool obstacle_detected)
     }
 }
 
+static void add_obstacle_to_grid(char *grid, point2_t point) {
+    int point_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(point.x), BOARD_TO_ASTAR_GRID_Y(point.y));
+    grid[point_index] = ASTAR_NODE_FULL;
+    const int res = 32;
+    for (int i=0; i < res; i++) {
+        float a = (float)i * 2 * M_PI / res;
+        int x = BOARD_TO_ASTAR_GRID_X(point.x + cosf(a) * OBSTACLE_MARGIN);
+        int y = BOARD_TO_ASTAR_GRID_Y(point.y + sinf(a) * OBSTACLE_MARGIN);
+        int grid_index = astar_getIndexByWidth(GRID_SIZE_X, x, y);
+        grid[grid_index] = ASTAR_NODE_FULL;
+    }
+}
+
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void *user_data)
 {
     float robot_dir;
@@ -159,7 +174,8 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     poklegscom_get_pos(&robot_pos);
 
     int next_astar_grid = (current_astar_grid + 1) % 2;
-    memset(astar_grids[next_astar_grid], ASTAR_NODE_EMPTY, sizeof(astar_grids[next_astar_grid]));
+    char *grid = astar_grids[current_astar_grid];
+    memset(grid, ASTAR_NODE_EMPTY, sizeof(astar_grids[0]));
     bool obstacle_detected = false;
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
@@ -193,8 +209,7 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
             obstacle_detected = true;
         }
 
-        int grid_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(lidar_point2.x), BOARD_TO_ASTAR_GRID_Y(lidar_point2.y));
-        astar_grids[next_astar_grid][grid_index] = ASTAR_NODE_FULL;
+        add_obstacle_to_grid(grid, lidar_point2);
     }
     current_astar_grid = next_astar_grid;
     update_obstacle_detection_state(obstacle_detected);
@@ -206,7 +221,7 @@ int nav_init(void)
         .name = "nav_workq",
     };
 
-    memset(astar_grids[current_astar_grid], ASTAR_NODE_EMPTY, sizeof(astar_grids[current_astar_grid]));
+    memset(astar_grids, ASTAR_NODE_EMPTY, sizeof(astar_grids));
 
     poklegscom_set_break(1);
     k_work_queue_start(&nav_workq, nav_workq_stack, K_THREAD_STACK_SIZEOF(nav_workq_stack), 8,
