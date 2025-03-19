@@ -61,7 +61,7 @@ static void log_astar_grid(void) {
     char *current_grid = astar_grids[current_astar_grid];
     char line[GRID_SIZE_X * 2 + 1];
     memset(line, ' ', sizeof(line));
-    line[GRID_SIZE_X] = '\0';
+    line[GRID_SIZE_X*2] = '\0';
     LOG_INF("A* grid:");
     for (int y = 0; y < GRID_SIZE_Y; y++) {
         for (int x = 0; x < GRID_SIZE_X; x++) {
@@ -220,16 +220,32 @@ void update_obstacle_detection_state(bool obstacle_detected)
     }
 }
 
+void mark_grid(char *grid, int x, int y) {
+    // Ensure the coordinates are within valid grid bounds
+    if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y) {
+        return;  // Avoid out-of-bounds memory access
+    }
+
+    // Get the 1D index for the 2D grid coordinates
+    int grid_index = astar_getIndexByWidth(GRID_SIZE_X, x, y);
+
+    // Mark the grid cell as occupied
+    grid[grid_index] = ASTAR_NODE_FULL;
+}
+
+// Grid-Based Flood Fill
 static void add_obstacle_to_grid(char *grid, point2_t point) {
-    int point_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(point.x), BOARD_TO_ASTAR_GRID_Y(point.y));
-    grid[point_index] = ASTAR_NODE_FULL;
-    const int res = 32;
-    for (int i=0; i < res; i++) {
-        float a = (float)i * 2 * M_PI / res;
-        int x = BOARD_TO_ASTAR_GRID_X(point.x + cosf(a) * OBSTACLE_MARGIN);
-        int y = BOARD_TO_ASTAR_GRID_Y(point.y + sinf(a) * OBSTACLE_MARGIN);
-        int grid_index = astar_getIndexByWidth(GRID_SIZE_X, x, y);
-        grid[grid_index] = ASTAR_NODE_FULL;
+    int cx = BOARD_TO_ASTAR_GRID_X(point.x);
+    int cy = BOARD_TO_ASTAR_GRID_Y(point.y);
+    int r = OBSTACLE_MARGIN * (GRID_SIZE_X-1) / (BOARD_SIZE_X - 2*BOARD_BORDER_MARGIN);
+    // int r = OBSTACLE_MARGIN * (GRID_SIZE_Y-1) / (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN);
+
+    for (int x = -r; x <= r; x++) {
+        for (int y = -r; y <= r; y++) {
+            if (x*x + y*y <= r*r) { // Check if inside the circle
+                mark_grid(grid, cx + x, cy + y);
+            }
+        }
     }
 }
 
