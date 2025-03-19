@@ -101,7 +101,7 @@ class Robot:
 
 @dataclass
 class World:
-    obstacles: list[Obstacle] = field(default_factory=list)
+    obstacles: dict[str, Obstacle] = field(default_factory=dict)
 
 # quick function to load an image
 def load_image(name):
@@ -311,7 +311,7 @@ class LidarSim(SimPart):
     def lidar_scan(self, dt):
         quant = 3
         debug_point_list = []
-        obstacle_shape = unary_union([obstacle.get_shape() for obstacle in self.world.obstacles])
+        obstacle_shape = unary_union([obstacle.get_shape() for _, obstacle in self.world.obstacles.items()])
         to_send_point_list = []
         for i in range(self.resolution):
             # Lidar is going clockwise that's why theres is a -
@@ -342,7 +342,7 @@ class PokibotGameSimulator:
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
-        self.world = World(obstacles=[RobotObstacle([0, 1.5], 0.2)])
+        self.world = World(obstacles={"opponent_robot": RobotObstacle([0, 1.5], 0.2)})
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
 
@@ -369,7 +369,7 @@ class PokibotGameSimulator:
                 board.dim_y = [0, background.get_height()]
                 screen.blit(background, (board.dim_x[0], board.dim_y[0]))
 
-                for obstacle in self.world.obstacles:
+                for key, obstacle in self.world.obstacles.items():
                     draw_obstacle(screen, board, obstacle)
 
                 for name, robot in self.robots.items():
@@ -382,6 +382,11 @@ class PokibotGameSimulator:
                     # quit upon screen exit
                     if e.type == pg.QUIT:
                         return
+                    if e.type == pg.KEYDOWN and e.key == pg.K_a:
+                        if "center_obstacle" in self.world.obstacles:
+                            self.world.obstacles.pop("center_obstacle")
+                        else:
+                            self.world.obstacles["center_obstacle"] = CircleObstacle([0, 1], 0.05)
 
                 pg.display.update()
                 clock.tick(60)
