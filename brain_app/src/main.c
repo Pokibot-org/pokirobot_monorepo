@@ -68,7 +68,7 @@ int main(void)
     };
 
     uint32_t nav_events;
-    nav_go_to(&waypoints[0], K_FOREVER);
+    nav_go_to(&waypoints[0], K_SECONDS(5));
     nav_wait_events(&nav_events);
     nav_go_to(&waypoints[1], K_FOREVER);
     nav_wait_events(&nav_events);
