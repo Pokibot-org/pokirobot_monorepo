@@ -32,13 +32,36 @@ static bool current_obstacle_detected_state = false;
 #define ASTAR_NODE_FULL  0
 #define GRID_SIZE_Y 20
 #define GRID_SIZE_X 30
-static char astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
+#define BOARD_TO_ASTAR_GRID_X(x) ((int)((x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X))
+#define BOARD_TO_ASTAR_GRID_Y(y) ((int)((y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y))
+#define ASTAR_GRID_TO_BOARD_X(x) ((float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X)
+#define ASTAR_GRID_TO_BOARD_Y(y) ((float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y)
+
+static char astar_grids[2][GRID_SIZE_Y * GRID_SIZE_X];
+static int current_astar_grid = 0;
 
 static const pos2_t sensivity = {
     .x = 0.01f,
     .y = 0.01f,
     .a = DEG_TO_RAD(2),
 };
+
+static void log_astar_grid(void) {
+    char *current_grid = astar_grids[current_astar_grid];
+    char line[GRID_SIZE_X + 1];
+    line[GRID_SIZE_X] = '\0';
+    for (int y = 0; y < GRID_SIZE_Y; y++) {
+        for (int x = 0; x < GRID_SIZE_X; x++) {
+            int index = astar_getIndexByWidth(GRID_SIZE_X, x, GRID_SIZE_Y - y - 1);
+            if (current_grid[index] == ASTAR_NODE_FULL) {
+                line[x] = '1';
+            } else {
+                line[x] = '0';
+            }
+        }
+        LOG_INF("%s", line);
+    }
+}
 
 int nav_set_pos(const pos2_t *pos)
 {
@@ -52,18 +75,17 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
     poklegscom_get_pos(&robot_pos);
     LOG_INF("from{.x=%.2f, .y=%.2f}", (double)robot_pos.x, (double)robot_pos.y);
     LOG_INF("to{.x=%.2f, .y=%.2f}", (double)target_pos->x, (double)target_pos->y);
-    int start = astar_getIndexByWidth(GRID_SIZE_X, (robot_pos.x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X,
-                                      (robot_pos.y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y);
-    int end = astar_getIndexByWidth(GRID_SIZE_X, (target_pos->x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X,
-                                    (target_pos->y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y);
+    int start = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
+    int end = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(target_pos->x), BOARD_TO_ASTAR_GRID_Y(target_pos->y));
     LOG_INF("Indexes start %d | end %d", start, end);
 
     int *indexes =
-        astar_compute((char *)astar_grid, &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
+        astar_compute((char *)astar_grids[current_astar_grid], &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
     LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
     if (!indexes) {
         LOG_ERR("Error in astar_compute");
         poklegscom_set_waypoints(target_pos, 1);
+        log_astar_grid();
         return 0;
     }
     pos2_t *wps = k_malloc(sizeof(pos2_t) * sol_length);
@@ -72,8 +94,8 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
         int node_index = sol_length - i - 1;
         astar_getCoordByWidth(GRID_SIZE_X, indexes[i], &x, &y);
         wps[node_index].a = robot_pos.a;
-        wps[node_index].x = (float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X;
-        wps[node_index].y = (float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y;
+        wps[node_index].x = ASTAR_GRID_TO_BOARD_X(x);
+        wps[node_index].y = ASTAR_GRID_TO_BOARD_Y(y);
     }
     k_free(indexes);
     wps[sol_length - 1] = *target_pos;
@@ -133,6 +155,8 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     poklegscom_get_dir(&robot_dir);
     poklegscom_get_pos(&robot_pos);
 
+    int next_astar_grid = (current_astar_grid + 1) % 2;
+    memset(astar_grids[next_astar_grid], ASTAR_NODE_EMPTY, sizeof(astar_grids[next_astar_grid]));
     bool obstacle_detected = false;
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
@@ -165,7 +189,11 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
         if (obstacle_close) {
             obstacle_detected = true;
         }
+
+        int grid_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(lidar_point2.x), BOARD_TO_ASTAR_GRID_Y(lidar_point2.y));
+        astar_grids[next_astar_grid][grid_index] = ASTAR_NODE_FULL;
     }
+    current_astar_grid = next_astar_grid;
     update_obstacle_detection_state(obstacle_detected);
 }
 
@@ -175,7 +203,7 @@ int nav_init(void)
         .name = "nav_workq",
     };
 
-    memset(astar_grid, ASTAR_NODE_EMPTY, sizeof(astar_grid));
+    memset(astar_grids[current_astar_grid], ASTAR_NODE_EMPTY, sizeof(astar_grids[current_astar_grid]));
 
     poklegscom_set_break(1);
     k_work_queue_start(&nav_workq, nav_workq_stack, K_THREAD_STACK_SIZEOF(nav_workq_stack), 8,
