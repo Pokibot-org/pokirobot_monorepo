@@ -41,7 +41,7 @@ bool had_a_target_pos = false;
 #define GRID_SIZE_Y 21
 #define GRID_SIZE_X 31
 #define BOARD_BORDER_MARGIN  ROBOT_RADIUS
-#define OBSTACLE_MARGIN      (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS)
+#define OBSTACLE_MARGIN      (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + 0.10f)
 
 #define BOARD_TO_ASTAR_GRID_X(x) (MIN(MAX((int)((x - BOARD_MIN_X - BOARD_BORDER_MARGIN) * (GRID_SIZE_X-1) / (BOARD_SIZE_X - 2*BOARD_BORDER_MARGIN)), 0), GRID_SIZE_X-1))
 #define BOARD_TO_ASTAR_GRID_Y(y) (MIN(MAX((int)((y - BOARD_MIN_Y - BOARD_BORDER_MARGIN) * (GRID_SIZE_Y-1) / (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN)), 0), GRID_SIZE_Y-1))
@@ -250,6 +250,16 @@ static void add_obstacle_to_grid(char *grid, point2_t point) {
     }
 }
 
+static bool is_obstacled_too_close(float angle, float distance)
+{
+    if (distance > LIDAR_STOP_DISTANCE_MAX) {
+        return false;
+    }
+    float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) / (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
+    float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
+    return angle < test_angle / 2;
+}
+
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void *user_data)
 {
     float robot_dir;
@@ -287,9 +297,8 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
         // (double)RAD_TO_DEG(angle_dist_point_to_robot_dir)); LOG_INF("point->angle %.2f",
         // (double)RAD_TO_DEG(point->angle)); LOG_INF("point->distance %.2f",
         // (double)point->distance);
-        bool obstacle_close = angle_dist_point_to_robot_dir < LIDAR_STOP_ANGLE / 2 &&
-                              point->distance < LIDAR_STOP_DISTANCE;
-        if (obstacle_close) {
+
+        if (is_obstacled_too_close(angle_dist_point_to_robot_dir, point->distance)) {
             obstacle_detected = true;
         }
 
