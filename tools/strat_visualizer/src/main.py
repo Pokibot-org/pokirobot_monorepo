@@ -386,7 +386,7 @@ class PokibotGameSimulator:
                         if "center_obstacle" in self.world.obstacles:
                             self.world.obstacles.pop("center_obstacle")
                         else:
-                            self.world.obstacles["center_obstacle"] = CircleObstacle([0, 1], 0.05)
+                            self.world.obstacles["center_obstacle"] = RobotObstacle([0, 1], 0.20)
 
                 pg.display.update()
                 clock.tick(60)
