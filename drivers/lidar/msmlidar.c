@@ -29,6 +29,9 @@ struct msmlidar_data {
     char lidar_points_topic[128];
     bool started;
     sys_slist_t callbacks;
+    struct lidar_point points[MAX_LIDAR_POINTS];
+    size_t nb_points;
+    struct k_work work_call_clbks;
 };
 
 struct json_lidar_point {
@@ -52,6 +55,17 @@ struct json_obj_descr json_lidar_points_descr[] = {
     JSON_OBJ_DESCR_OBJ_ARRAY(struct json_lidar_points, points, MAX_LIDAR_POINTS, nb_points,
                              json_lidar_point_descr, ARRAY_SIZE(json_lidar_point_descr)),
 };
+
+
+void call_callbacks_work_handler(struct k_work *work) {
+   	struct msmlidar_data *data = CONTAINER_OF(work, struct msmlidar_data, work_call_clbks);
+
+    sys_snode_t *cur;
+    SYS_SLIST_FOR_EACH_NODE(&data->callbacks, cur) {
+        struct lidar_callback *cb = CONTAINER_OF(cur, struct lidar_callback, _node);
+        cb->clbk(data->points, data->nb_points, cb->user_data);
+    }
+}
 
 static char *buff_topic_builder(const struct device *dev, char *buffer, size_t buffer_len, char *ep)
 {
@@ -136,10 +150,9 @@ void lidar_points_clbk(char *payload, int payload_len, void *user_data)
         LOG_ERR("json parsing error %d\npayload:\n%s", err, payload);
         return;
     }
-    struct lidar_point points[MAX_LIDAR_POINTS];
     for (int i = 0; i < json_points.nb_points; i++) {
         struct json_lidar_point *jp = &json_points.points[i];
-        struct lidar_point *p = &points[i];
+        struct lidar_point *p = &data->points[i];
         if (decode_float(&jp->angle, &p->angle)) {
             LOG_ERR("json float parsing error");
             return;
@@ -150,11 +163,9 @@ void lidar_points_clbk(char *payload, int payload_len, void *user_data)
         }
         p->intensity = jp->intensity;
     }
-    sys_snode_t *cur;
-    SYS_SLIST_FOR_EACH_NODE(&data->callbacks, cur) {
-        struct lidar_callback *cb = CONTAINER_OF(cur, struct lidar_callback, _node);
-        cb->clbk(points, json_points.nb_points, cb->user_data);
-    }
+
+    data->nb_points = json_points.nb_points;
+    k_work_submit(&data->work_call_clbks);
 }
 
 static int msmlidar_init(const struct device *dev)
@@ -169,6 +180,8 @@ static int msmlidar_init(const struct device *dev)
     msm_topic_register(&lidar_points_topic);
 
     sys_slist_init(&data->callbacks);
+
+    k_work_init(&data->work_call_clbks, call_callbacks_work_handler);
 
     msm_send(topic_builder(dev, "status"), "connected");
     return 0;

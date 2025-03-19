@@ -26,6 +26,8 @@
     (((pos_a).x operator(pos_b).x) && ((pos_a).y operator(pos_b).y) &&                             \
      ((pos_a).a operator(pos_b).a))
 
+#define POINT2_COMPARE(a, operator, b) (((a).x operator(b).x) && ((a).y operator(b).y))
+
 vec2_t point2_diff(const point2_t terminal, const point2_t initial);
 vec2_t vec2_normalize(vec2_t vec);
 float vec2_abs(vec2_t vec);
@@ -36,6 +38,6 @@ float vec2_distance(point2_t a, point2_t b);
 pos2_t pos2_diff(const pos2_t target, const pos2_t orig);
 pos2_t pos2_add(const pos2_t a, const pos2_t b);
 pos2_t pos2_abs(const pos2_t a);
-float angle_modulo(float a);
+float angle_normalize(float a);
 
 #endif // POKUTILS_H

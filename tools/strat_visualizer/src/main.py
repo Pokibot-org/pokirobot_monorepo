@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 
+from numpy.__config__ import show
 from shapely.geometry.base import BaseGeometry
 from shapely.lib import box
 
@@ -21,6 +22,7 @@ logger = logging.getLogger("strat_visu")
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
 COLOR_DEEPBLACK = (0, 0, 0)
+COLOR_BLACK = (0x33, 0x33, 0x33)
 COLOR_RED = (0xE3, 0x65, 0x5B)
 COLOR_YELLOW = (0xCF, 0xD1, 0x86)
 COLOR_GREEN = (0x5B, 0x8C, 0x5A)
@@ -36,6 +38,15 @@ class Obstacle:
 
     def get_shape(self):
         return self.shape
+
+    def update_shape(self, shape):
+        self.shape = shape
+
+    def set_pos(self, pos):
+        pass
+
+    def get_pos(self):
+        return np.array([0.0, 0.0])
 
 def get_closest_collision_point(shape: BaseGeometry, ray_origin: Point, ray_direction: Point, ray_len = 1000):
     # Create a long line segment in the direction of the ray
@@ -69,10 +80,35 @@ def get_closest_collision_point(shape: BaseGeometry, ray_origin: Point, ray_dire
 
 class CircleObstacle(Obstacle):
     def __init__(self, pos, radius) -> None:
-        self.pos = pos
+        self.pos = np.array(pos)
         self.radius = radius
         shape = Point(pos[0], pos[1]).buffer(radius)
         super().__init__(shape)
+
+    def set_pos(self, pos):
+        shape = Point(pos[0], pos[1]).buffer(self.radius)
+        self.update_shape(shape)
+        self.pos = pos
+
+    def get_pos(self):
+        return self.pos
+
+class RobotObstacle(Obstacle):
+    def __init__(self, pos, radius, scan_radius=0.035) -> None:
+        self.pos = np.array(pos)
+        self.radius = radius
+        self.scan_radius = scan_radius
+        shape = Point(pos[0], pos[1]).buffer(scan_radius)
+        super().__init__(shape)
+
+    def set_pos(self, pos):
+        shape = Point(pos[0], pos[1]).buffer(self.scan_radius)
+        self.update_shape(shape)
+        self.pos = pos
+
+    def get_pos(self):
+        return self.pos
+
 
 class Board:
     def __init__(self) -> None:
@@ -92,7 +128,7 @@ class Robot:
 
 @dataclass
 class World:
-    obstacles: list[Obstacle] = field(default_factory=list)
+    obstacles: dict[str, Obstacle] = field(default_factory=dict)
 
 # quick function to load an image
 def load_image(name):
@@ -136,6 +172,14 @@ def draw_obstacle(screen, board: Board, obstacle: Obstacle):
         on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
         pg.draw.circle(screen, COLOR_DEEPBLACK, on_board_pos, on_board_radius)
         pg.draw.circle(screen, COLOR_GREEN, on_board_pos, on_board_radius*0.98)
+    elif type(obstacle) is RobotObstacle:
+        on_board_radius = obstacle.radius * ratio
+        on_board_scan_radius = obstacle.scan_radius * ratio
+        on_board_pos = ((obstacle.pos[0] - board.mins[0]) * ratio, board.dim_y[1] - (obstacle.pos[1] - board.mins[1]) * ratio)
+        pg.draw.circle(screen, COLOR_DEEPBLACK, on_board_pos, on_board_radius)
+        pg.draw.circle(screen, COLOR_GREEN, on_board_pos, on_board_radius*0.98)
+        pg.draw.circle(screen, COLOR_BLACK, on_board_pos, on_board_scan_radius)
+
 
 def draw_debug_point(screen, board: Board, pos, radius=0.01, color=COLOR_RED):
     ratio = board.dim_x[1] / board.real_size[0]
@@ -294,17 +338,18 @@ class LidarSim(SimPart):
     def lidar_scan(self, dt):
         quant = 3
         debug_point_list = []
-        obstacle_shape = unary_union([obstacle.get_shape() for obstacle in self.world.obstacles])
+        obstacle_shape = unary_union([obstacle.get_shape() for _, obstacle in self.world.obstacles.items()])
         to_send_point_list = []
         for i in range(self.resolution):
             # Lidar is going clockwise that's why theres is a -
-            a = -i/self.resolution * 2 * np.pi + self.robot.pos[2]
-            dir = [np.cos(a), np.sin(a)]
+            lidar_angle = i/self.resolution * 2 * np.pi
+            table_angle = -lidar_angle + self.robot.pos[2]
+            dir = [np.cos(table_angle), np.sin(table_angle)]
             robot_pos = Point(self.robot.pos[0:2])
             shapely_point = get_closest_collision_point(obstacle_shape, robot_pos , Point(dir))
             if shapely_point:
                 debug_point_list.append([shapely_point.x, shapely_point.y])
-                to_send_point_list.append({"angle": round(-a, quant), "distance": round(robot_pos.distance(shapely_point), quant), "intensity": 255})
+                to_send_point_list.append({"angle": round(lidar_angle, quant), "distance": round(robot_pos.distance(shapely_point), quant), "intensity": 255})
         self.robot.lidar_points = debug_point_list
         self.msm.send("lidar_points", json.dumps(to_send_point_list))
 
@@ -324,7 +369,7 @@ class PokibotGameSimulator:
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
-        self.world = World(obstacles=[CircleObstacle([0, 1.5], 0.2)])
+        self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
 
@@ -351,7 +396,7 @@ class PokibotGameSimulator:
                 board.dim_y = [0, background.get_height()]
                 screen.blit(background, (board.dim_x[0], board.dim_y[0]))
 
-                for obstacle in self.world.obstacles:
+                for key, obstacle in self.world.obstacles.items():
                     draw_obstacle(screen, board, obstacle)
 
                 for name, robot in self.robots.items():
@@ -364,6 +409,24 @@ class PokibotGameSimulator:
                     # quit upon screen exit
                     if e.type == pg.QUIT:
                         return
+                    if e.type == pg.KEYDOWN and e.key == pg.K_a:
+                        if "robot_obstacle" in self.world.obstacles:
+                            self.world.obstacles.pop("robot_obstacle")
+                        else:
+                            self.world.obstacles["robot_obstacle"] = RobotObstacle([0.0, 1.0], 0.20)
+                if "robot_obstacle" in self.world.obstacles:
+                    keys = pg.key.get_pressed()
+                    movement_speed = 0.025
+                    ro = self.world.obstacles["robot_obstacle"]
+                    if keys[pg.K_LEFT]:
+                        ro.set_pos(ro.get_pos() - np.array([movement_speed, 0.0]))
+                    if keys[pg.K_RIGHT]:
+                        ro.set_pos(ro.get_pos() + np.array([movement_speed, 0.0]))
+                    if keys[pg.K_UP]:
+                        ro.set_pos(ro.get_pos() + np.array([0.0, movement_speed]))
+                    if keys[pg.K_DOWN]:
+                        ro.set_pos(ro.get_pos() - np.array([0.0, movement_speed]))
+
 
                 pg.display.update()
                 clock.tick(60)

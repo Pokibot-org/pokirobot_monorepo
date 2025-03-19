@@ -14,6 +14,9 @@ rebuild: # rebuild target
 build-pc-app: # build strat pc app
 	west build -b native_sim/native/64 . --build-dir ../build
 
+build-pc-app-debug: # build strat pc app
+	west build -b native_sim/native/64 . --build-dir ../build -- -DOVERLAY_CONFIG="debug.conf"
+
 rebuild-pc-app: # build strat pc app
 	west build -b native_sim/native/64 . --pristine --build-dir ../build
 
