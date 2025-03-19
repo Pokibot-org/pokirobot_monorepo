@@ -28,13 +28,13 @@ int poklegscom_set_pos(const pos2_t *pos)
 }
 
 int poklegscom_set_waypoints(const pos2_t *waypoints, size_t nb_waypoints) {
-    static char topic_buff[1024];
+    static char topic_buff[2048];
     int size = sizeof(topic_buff);
     int offset = 0;
     offset += snprintf(topic_buff, size, "[");
     for (int i=0; i < nb_waypoints; i++) {
         const pos2_t *pos = &waypoints[i];
-        offset += snprintf(&topic_buff[offset], sizeof(topic_buff) - offset, "{\"x\": %f, \"y\": %f, \"a\": %f},", (double)pos->x, (double)pos->y, (double)pos->a);
+        offset += snprintf(&topic_buff[offset], sizeof(topic_buff) - offset, "{\"x\":%.3f,\"y\":%.3f,\"a\":%.3f},", (double)pos->x, (double)pos->y, (double)pos->a);
     }
     topic_buff[offset-1] = ']';
     return msm_send( ROOT_TOPIC "set_waypoints", topic_buff);
