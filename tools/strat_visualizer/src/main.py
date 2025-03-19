@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 
+from numpy.__config__ import show
 from shapely.geometry.base import BaseGeometry
 from shapely.lib import box
 
@@ -38,6 +39,15 @@ class Obstacle:
     def get_shape(self):
         return self.shape
 
+    def update_shape(self, shape):
+        self.shape = shape
+
+    def set_pos(self, pos):
+        pass
+
+    def get_pos(self):
+        return np.array([0.0, 0.0])
+
 def get_closest_collision_point(shape: BaseGeometry, ray_origin: Point, ray_direction: Point, ray_len = 1000):
     # Create a long line segment in the direction of the ray
     ray_end = Point(ray_origin.x + ray_direction.x * ray_len, ray_origin.y + ray_direction.y * ray_len)
@@ -70,18 +80,35 @@ def get_closest_collision_point(shape: BaseGeometry, ray_origin: Point, ray_dire
 
 class CircleObstacle(Obstacle):
     def __init__(self, pos, radius) -> None:
-        self.pos = pos
+        self.pos = np.array(pos)
         self.radius = radius
         shape = Point(pos[0], pos[1]).buffer(radius)
         super().__init__(shape)
 
+    def set_pos(self, pos):
+        shape = Point(pos[0], pos[1]).buffer(self.radius)
+        self.update_shape(shape)
+        self.pos = pos
+
+    def get_pos(self):
+        return self.pos
+
 class RobotObstacle(Obstacle):
     def __init__(self, pos, radius, scan_radius=0.035) -> None:
-        self.pos = pos
+        self.pos = np.array(pos)
         self.radius = radius
         self.scan_radius = scan_radius
         shape = Point(pos[0], pos[1]).buffer(scan_radius)
         super().__init__(shape)
+
+    def set_pos(self, pos):
+        shape = Point(pos[0], pos[1]).buffer(self.scan_radius)
+        self.update_shape(shape)
+        self.pos = pos
+
+    def get_pos(self):
+        return self.pos
+
 
 class Board:
     def __init__(self) -> None:
@@ -342,7 +369,7 @@ class PokibotGameSimulator:
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
-        self.world = World(obstacles={"opponent_robot": RobotObstacle([0, 1.5], 0.2)})
+        self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
 
@@ -383,10 +410,23 @@ class PokibotGameSimulator:
                     if e.type == pg.QUIT:
                         return
                     if e.type == pg.KEYDOWN and e.key == pg.K_a:
-                        if "center_obstacle" in self.world.obstacles:
-                            self.world.obstacles.pop("center_obstacle")
+                        if "robot_obstacle" in self.world.obstacles:
+                            self.world.obstacles.pop("robot_obstacle")
                         else:
-                            self.world.obstacles["center_obstacle"] = RobotObstacle([0, 1], 0.20)
+                            self.world.obstacles["robot_obstacle"] = RobotObstacle([0.0, 1.0], 0.20)
+                if "robot_obstacle" in self.world.obstacles:
+                    keys = pg.key.get_pressed()
+                    movement_speed = 0.025
+                    ro = self.world.obstacles["robot_obstacle"]
+                    if keys[pg.K_LEFT]:
+                        ro.set_pos(ro.get_pos() - np.array([movement_speed, 0.0]))
+                    if keys[pg.K_RIGHT]:
+                        ro.set_pos(ro.get_pos() + np.array([movement_speed, 0.0]))
+                    if keys[pg.K_UP]:
+                        ro.set_pos(ro.get_pos() + np.array([0.0, movement_speed]))
+                    if keys[pg.K_DOWN]:
+                        ro.set_pos(ro.get_pos() - np.array([0.0, movement_speed]))
+
 
                 pg.display.update()
                 clock.tick(60)
