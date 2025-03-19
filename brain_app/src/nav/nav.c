@@ -32,10 +32,12 @@ static bool current_obstacle_detected_state = false;
 #define ASTAR_NODE_FULL  0
 #define GRID_SIZE_Y 20
 #define GRID_SIZE_X 30
-#define BOARD_TO_ASTAR_GRID_X(x) ((int)((x - BOARD_MIN_X) * GRID_SIZE_X / BOARD_SIZE_X))
-#define BOARD_TO_ASTAR_GRID_Y(y) ((int)((y - BOARD_MIN_Y) * GRID_SIZE_Y / BOARD_SIZE_Y))
-#define ASTAR_GRID_TO_BOARD_X(x) ((float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X)
-#define ASTAR_GRID_TO_BOARD_Y(y) ((float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y)
+#define BOARD_BORDER_MARGIN  ROBOT_RADIUS
+
+#define BOARD_TO_ASTAR_GRID_X(x) (MIN(MAX((int)((x - BOARD_MIN_X + BOARD_BORDER_MARGIN) * GRID_SIZE_X / BOARD_SIZE_X), 0), GRID_SIZE_X))
+#define BOARD_TO_ASTAR_GRID_Y(y) (MIN(MAX((int)((y - BOARD_MIN_Y + BOARD_BORDER_MARGIN) * GRID_SIZE_Y / BOARD_SIZE_Y), 0), GRID_SIZE_Y))
+#define ASTAR_GRID_TO_BOARD_X(x) ((float)x * BOARD_SIZE_X / GRID_SIZE_X + BOARD_MIN_X - BOARD_BORDER_MARGIN)
+#define ASTAR_GRID_TO_BOARD_Y(y) ((float)y * BOARD_SIZE_Y / GRID_SIZE_Y + BOARD_MIN_Y - BOARD_BORDER_MARGIN)
 
 static char astar_grids[2][GRID_SIZE_Y * GRID_SIZE_X];
 static int current_astar_grid = 0;
