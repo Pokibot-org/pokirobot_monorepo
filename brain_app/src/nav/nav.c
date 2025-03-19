@@ -213,6 +213,7 @@ void update_obstacle_detection_state(bool obstacle_detected)
         if (obstacle_detected) {
             LOG_INF("Obstacle detected");
             poklegscom_set_break(1);
+            k_work_reschedule_for_queue(&nav_workq, &recompute_path_work, K_NO_WAIT);
         } else {
             LOG_INF("No obstacle detected");
             poklegscom_set_break(0);
