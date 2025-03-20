@@ -1,4 +1,5 @@
 #include <pokibot/lib/poktocol.h>
+#include <pokibot/lib/pokutils.h>
 #include <pokibot/poklegscom.h>
 #include <pokibot/msm.h>
 #include <stddef.h>
@@ -21,10 +22,11 @@ static int format_pos(char *buff, size_t buff_size, const pos2_t *pos) {
 
 int poklegscom_set_pos(const pos2_t *pos)
 {
-    current_pos = *pos;
     static char topic_buff[128];
     format_pos(topic_buff, sizeof(topic_buff), pos);
-    return msm_send( ROOT_TOPIC "set_pos", topic_buff);
+    int ret = msm_send( ROOT_TOPIC "set_pos", topic_buff);
+    while (!POS2_COMPARE(current_pos, ==, *pos)) {k_yield();}
+    return ret;
 }
 
 int poklegscom_set_waypoints(const pos2_t *waypoints, size_t nb_waypoints) {
