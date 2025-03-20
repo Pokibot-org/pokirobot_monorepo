@@ -11,3 +11,9 @@ target_sources(app PRIVATE
     src/astar-jps/IndexPriorityQueue.c
     src/astar-jps/AStar.c
 )
+
+if (CONFIG_MQTT_SIM_MESSENGER)
+target_sources(app PRIVATE
+    src/const_publisher.c
+)
+endif()
