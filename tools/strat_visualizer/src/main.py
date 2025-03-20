@@ -2,6 +2,7 @@
 import os
 
 from numpy.__config__ import show
+from numpy.typing import NDArray
 from shapely.geometry.base import BaseGeometry
 from shapely.lib import box
 
@@ -125,6 +126,7 @@ class Robot:
         self.dir = 0
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
+        self.wps: list[NDArray] = []
 
 @dataclass
 class World:
@@ -287,6 +289,7 @@ class PoklegscomSim(SimPart):
             case "set_waypoints":
                 self.wp_index = 0
                 self.wps = [np.array([x["x"], x["y"], x["a"]]) for x in payload]
+                self.robot.wps = self.wps
                 logger.info(f"set wps {payload}")
             case "set_break":
                 self.motor_break = payload["state"]
@@ -294,11 +297,13 @@ class PoklegscomSim(SimPart):
     def movement_sim(self, dt):
         max_speed_vec = np.array([self.speed*dt, self.speed*dt, self.angle_speed*dt])
         sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
-        if self.wp_index < len(self.wps) and not self.motor_break:
+        nb_wps = len(self.wps)
+        if self.wp_index < nb_wps and not self.motor_break:
             target_pos = self.wps[self.wp_index]
             self.robot.pos += np.maximum(np.minimum(target_pos - self.robot.pos, max_speed_vec), -max_speed_vec)
             if np.all(np.abs(target_pos - self.robot.pos) < sensivity):
                 self.wp_index += 1
+                self.robot.wps = self.wps[min(self.wp_index, nb_wps - 1):]
 
     def pos_publish(self, dt):
         self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
@@ -372,6 +377,7 @@ class PokibotGameSimulator:
         self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.robots : dict[str, Robot]  = {}
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
+        self.display_wps = True
 
     def run(self):
         def pg_fun():
@@ -403,12 +409,17 @@ class PokibotGameSimulator:
                     draw_robot(screen, board, robot)
                     for point in robot.lidar_points:
                         draw_debug_point(screen, board, point)
+                    if self.display_wps:
+                        for wp in robot.wps:
+                            draw_debug_point(screen, board, (wp[0], wp[1]), color=COLOR_PURPLE)
 
 
                 for e in pg.event.get():
                     # quit upon screen exit
                     if e.type == pg.QUIT:
                         return
+                    if e.type == pg.KEYDOWN and e.key == pg.K_w:
+                        self.display_wps = not self.display_wps
                     if e.type == pg.KEYDOWN and e.key == pg.K_a:
                         if "robot_obstacle" in self.world.obstacles:
                             self.world.obstacles.pop("robot_obstacle")
