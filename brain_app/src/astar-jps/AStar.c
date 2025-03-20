@@ -405,14 +405,19 @@ static int init_astar_object (astar_t* astar, const char *grid, int *solLength, 
 
 	int size = bounds.x * bounds.y;
 
-	if (start >= size || start < 0 || end >= size || end < 0)
+	if (start >= size || start < 0 || end >= size || end < 0) {
+	    LOG_ERR("Start or end index not in bounds");
 		return 0;
+	}
 
 	coord_t startCoord = getCoord (bounds, start);
 	coord_t endCoord = getCoord (bounds, end);
 
-	if (!contained (bounds, startCoord) || !contained (bounds, endCoord))
+	if (!contained (bounds, startCoord) || !contained (bounds, endCoord)) {
+	    LOG_ERR("Start or end coords not in bounds");
 		return 0;
+	}
+
 
 	astar->solutionLength = solLength;
 	astar->bounds = bounds;
@@ -421,24 +426,29 @@ static int init_astar_object (astar_t* astar, const char *grid, int *solLength, 
 	astar->grid = grid;
 
 	astar->open = createQueue();
-	if (!astar->open)
-		return 0;
+	if (!astar->open) {
+	   LOG_ERR("createQueue error");
+	   return 0;
+	}
 
 	astar->closed = k_malloc (size);
 	if (!astar->closed) {
+        LOG_ERR("malloc astar->closed of size %d error", size);
 		freeQueue (astar->open);
 		return 0;
 	}
 
 	astar->gScores = k_malloc (size * sizeof (float));
 	if (!astar->gScores) {
+	   LOG_ERR("malloc astar->gScores of size %d error", size * sizeof (float));
 		freeQueue (astar->open);
 		k_free (astar->closed);
 		return 0;
 	}
 
-	astar->cameFrom = k_malloc (size * sizeof (int));
+	astar->cameFrom = k_malloc (size * sizeof (node));
 	if (!astar->cameFrom) {
+        LOG_ERR("malloc astar->cameFrom of size %d error", size * sizeof (node));
 		freeQueue (astar->open);
 		k_free (astar->closed);
 		k_free (astar->gScores);
