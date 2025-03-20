@@ -125,9 +125,8 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
     LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
     if (!indexes) {
         LOG_ERR("Error in astar_compute");
-        poklegscom_set_waypoints(target_pos, 1);
         log_astar_grid(in_use_astar_grid);
-        return 0;
+        return -1;
     }
     if (sol_length == 0) {
         LOG_WRN("Already at destination");
@@ -141,7 +140,7 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
     if (!wps) {
         LOG_ERR("wps malloc failed");
         k_free(indexes);
-        return -1;
+        return -2;
     }
     for (int i = 0; i < sol_length; i++) {
         int x, y;
