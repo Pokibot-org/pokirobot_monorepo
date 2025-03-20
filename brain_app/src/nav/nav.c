@@ -166,6 +166,7 @@ static void nav_stop_all(void)
     k_work_cancel_delayable_sync(&check_target_reached_work, &sync);
     k_work_cancel_delayable_sync(&recompute_path_work, &sync);
     k_work_cancel_delayable_sync(&timeout_work, &sync);
+    had_a_target_pos = false;
 }
 
 int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
@@ -174,6 +175,9 @@ int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
     had_a_target_pos = true;
+    if (!current_obstacle_detected_state) {
+        poklegscom_set_break(0);
+    }
     go_to_with_pathfinding(pos);
     k_work_schedule_for_queue(&nav_workq, &recompute_path_work, K_MSEC(1000));
     k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
@@ -187,15 +191,19 @@ int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout)
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
     had_a_target_pos = true;
+    if (!current_obstacle_detected_state) {
+        poklegscom_set_break(0);
+    }
     poklegscom_set_waypoints(pos, 1);
     k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
     k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
     return 0;
 }
 
-int nav_cancel(void)
+void nav_cancel(void)
 {
     nav_stop_all();
+    poklegscom_set_break(1);
     k_event_set(&nav_events, NAV_EVENT_CANCELED);
 }
 
