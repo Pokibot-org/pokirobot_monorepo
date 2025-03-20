@@ -307,8 +307,11 @@ class PoklegscomSim(SimPart):
 
     def pos_publish(self, dt):
         self.poklegscom.send("pos", f"{self.robot.pos[0]} {self.robot.pos[1]} {self.robot.pos[2]}")
-        if self.wp_index < len(self.wps):
-            target = self.wps[self.wp_index]
+        wps = self.wps
+        wps_len = len(wps)
+        wp_index = self.wp_index
+        if wp_index < wps_len:
+            target = wps[min(wp_index + 1, wps_len - 1)]
             target_pos = np.array([target[0], target[1]])
             robot_pos = np.array([self.robot.pos[0], self.robot.pos[1]])
             diff = target_pos - robot_pos
