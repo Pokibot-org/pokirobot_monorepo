@@ -122,7 +122,7 @@ class Board:
 class Robot:
     def __init__(self, radius=0.19, team=0) -> None:
         self.radius = radius
-        self.pos = np.array([0, 0, 0])
+        self.pos = np.array([0.0, 1.0, 0.0])
         self.dir = 0
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
