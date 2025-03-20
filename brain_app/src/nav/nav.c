@@ -37,8 +37,9 @@ bool had_a_target_pos = false;
 
 #define ASTAR_NODE_EMPTY    1
 #define ASTAR_NODE_FULL     0
-#define GRID_SIZE_Y         21
-#define GRID_SIZE_X         31
+#define GRID_REZ    ((int)(100 / 5))
+#define GRID_SIZE_Y (2 * GRID_REZ + 1)
+#define GRID_SIZE_X (3 * GRID_REZ + 1)
 #define BOARD_BORDER_MARGIN ROBOT_RADIUS
 #define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + 0.10f)
 
@@ -61,6 +62,7 @@ bool had_a_target_pos = false;
 
 static char astar_grids[2][GRID_SIZE_Y * GRID_SIZE_X];
 static int current_astar_grid = 0;
+static char in_use_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 
 static const pos2_t sensivity = {
     .x = 0.01f,
@@ -68,9 +70,10 @@ static const pos2_t sensivity = {
     .a = DEG_TO_RAD(2),
 };
 
-static void log_astar_grid(void)
-{
-    char *current_grid = astar_grids[current_astar_grid];
+static void log_astar_grid(char *current_grid) {
+    pos2_t robot_pos;
+    poklegscom_get_pos(&robot_pos);
+    int robot_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
     char line[GRID_SIZE_X * 2 + 1];
     memset(line, ' ', sizeof(line));
     line[GRID_SIZE_X * 2] = '\0';
@@ -78,8 +81,10 @@ static void log_astar_grid(void)
     for (int y = 0; y < GRID_SIZE_Y; y++) {
         for (int x = 0; x < GRID_SIZE_X; x++) {
             int index = astar_getIndexByWidth(GRID_SIZE_X, x, GRID_SIZE_Y - y - 1);
-            if (current_grid[index] == ASTAR_NODE_FULL) {
-                line[x * 2] = '1';
+            if (robot_index == index) {
+                line[x*2] = 'R';
+            } else if (current_grid[index] == ASTAR_NODE_FULL) {
+                line[x*2] = '1';
             } else {
                 line[x * 2] = '0';
             }
@@ -112,14 +117,16 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
                                     BOARD_TO_ASTAR_GRID_Y(target_pos->y));
     LOG_INF("Indexes start %d | end %d", start, end);
 
-    int *indexes = astar_compute((char *)astar_grids[current_astar_grid], &sol_length, GRID_SIZE_X,
-                                 GRID_SIZE_Y, start, end);
+    memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
+    in_use_astar_grid[start] = ASTAR_NODE_EMPTY;
+    int *indexes =
+        astar_compute((char *)in_use_astar_grid, &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
     LOG_INF("Compute A* in %dms", k_uptime_get_32() - start_time);
     LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
     if (!indexes) {
         LOG_ERR("Error in astar_compute");
         poklegscom_set_waypoints(target_pos, 1);
-        log_astar_grid();
+        log_astar_grid(in_use_astar_grid);
         return 0;
     }
     if (sol_length == 0) {
@@ -145,6 +152,7 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
         wps[node_index].y = ASTAR_GRID_TO_BOARD_Y(y);
     }
     k_free(indexes);
+    LOG_INF("First wp: {.x=%0.3f, .y=%0.3f}", (double)wps[0].x, (double)wps[0].y);
     wps[sol_length - 1] = *target_pos;
     poklegscom_set_waypoints(wps, sol_length);
     k_free(wps);
