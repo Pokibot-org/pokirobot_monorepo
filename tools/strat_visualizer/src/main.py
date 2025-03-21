@@ -123,7 +123,7 @@ class Robot:
     def __init__(self, radius=0.19, team=0) -> None:
         self.radius = radius
         self.pos = np.array([0.0, 1.0, 0.0])
-        self.dir = 0
+        self.dir = 0.0
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
         self.wps: list[NDArray] = []
@@ -311,11 +311,13 @@ class PoklegscomSim(SimPart):
         wps_len = len(wps)
         wp_index = self.wp_index
         if wp_index < wps_len:
-            target = wps[min(wp_index + 1, wps_len - 1)]
-            target_pos = np.array([target[0], target[1]])
             robot_pos = np.array([self.robot.pos[0], self.robot.pos[1]])
-            diff = target_pos - robot_pos
-            self.robot.dir = np.atan2(diff[1], diff[0])
+            nb = 3
+            last_target_index = min(wp_index + nb, wps_len - 1)
+            targets_pos = [np.array([wps[i][0], wps[i][1]]) for i in range(wp_index, last_target_index + 1)]
+            diffs = [target_pos - robot_pos for target_pos in targets_pos]
+            angles = [ np.atan2(diff[1], diff[0]) for diff in diffs]
+            self.robot.dir = float(np.average(angles))
             self.poklegscom.send("dir", f"{self.robot.dir}")
 
 
