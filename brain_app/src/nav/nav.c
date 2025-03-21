@@ -41,7 +41,7 @@ bool had_a_target_pos = false;
 #define GRID_SIZE_Y (2 * GRID_REZ + 1)
 #define GRID_SIZE_X (3 * GRID_REZ + 1)
 #define BOARD_BORDER_MARGIN ROBOT_RADIUS
-#define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + 0.10f)
+#define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + 0.05f)
 
 #define BOARD_TO_ASTAR_GRID_X(x)                                                                   \
     (MIN(MAX((int)((x - BOARD_MIN_X - BOARD_BORDER_MARGIN) * (GRID_SIZE_X - 1) /                   \
@@ -70,10 +70,34 @@ static const pos2_t sensivity = {
     .a = DEG_TO_RAD(2),
 };
 
-static void log_astar_grid(char *current_grid) {
+static void astar_mark_grid(char *grid, int x, int y, char value)
+{
+    // Ensure the coordinates are within valid grid bounds
+    if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y) {
+        return; // Avoid out-of-bounds memory access
+    }
+
+    // Get the 1D index for the 2D grid coordinates
+    int grid_index = astar_getIndexByWidth(GRID_SIZE_X, x, y);
+
+    // Mark the grid cell as occupied
+    grid[grid_index] = value;
+}
+
+static void astar_grid_flood_fill(char *grid, int cx, int cy, int r, char value)
+{
+    for (int x = -r; x <= r; x++) {
+        for (int y = -r; y <= r; y++) {
+            if (x * x + y * y <= r * r) { // Check if inside the circle
+                astar_mark_grid(grid, cx + x, cy + y, value);
+            }
+        }
+    }
+}
+
+static void log_astar_grid(char *current_grid, int start, int end) {
     pos2_t robot_pos;
     poklegscom_get_pos(&robot_pos);
-    int robot_index = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
     char line[GRID_SIZE_X * 2 + 1];
     memset(line, ' ', sizeof(line));
     line[GRID_SIZE_X * 2] = '\0';
@@ -81,8 +105,10 @@ static void log_astar_grid(char *current_grid) {
     for (int y = 0; y < GRID_SIZE_Y; y++) {
         for (int x = 0; x < GRID_SIZE_X; x++) {
             int index = astar_getIndexByWidth(GRID_SIZE_X, x, GRID_SIZE_Y - y - 1);
-            if (robot_index == index) {
-                line[x*2] = 'R';
+            if (start == index) {
+                line[x*2] = 'S';
+            } else if (end == index) {
+                line[x*2] = 'E';
             } else if (current_grid[index] == ASTAR_NODE_FULL) {
                 line[x*2] = '1';
             } else {
@@ -103,29 +129,26 @@ int nav_set_break(bool status)
     return poklegscom_set_break(status);
 }
 
-static int go_to_with_pathfinding(const pos2_t *target_pos)
+static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, const pos2_t *target_pos)
 {
     uint32_t start_time = k_uptime_get_32();
     int sol_length;
-    pos2_t robot_pos;
-    poklegscom_get_pos(&robot_pos);
-    LOG_INF("from{.x=%.2f, .y=%.2f}", (double)robot_pos.x, (double)robot_pos.y);
+
+    LOG_INF("from{.x=%.2f, .y=%.2f}", (double)start_pos->x, (double)start_pos->y);
     LOG_INF("to{.x=%.2f, .y=%.2f}", (double)target_pos->x, (double)target_pos->y);
-    int start = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x),
-                                      BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
+    int start = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(start_pos->x),
+                                      BOARD_TO_ASTAR_GRID_Y(start_pos->y));
     int end = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(target_pos->x),
                                     BOARD_TO_ASTAR_GRID_Y(target_pos->y));
     LOG_INF("Indexes start %d | end %d", start, end);
 
-    memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
-    in_use_astar_grid[start] = ASTAR_NODE_EMPTY;
     int *indexes =
-        astar_compute((char *)in_use_astar_grid, &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
+        astar_compute(astar_grid, &sol_length, GRID_SIZE_X, GRID_SIZE_Y, start, end);
     LOG_INF("Compute A* in %dms", k_uptime_get_32() - start_time);
     LOG_INF("Sol len %d | indexes %p", sol_length, (void *)indexes);
     if (!indexes) {
         LOG_ERR("Error in astar_compute");
-        log_astar_grid(in_use_astar_grid);
+        log_astar_grid(astar_grid, start, end);
         return -1;
     }
     if (sol_length == 0) {
@@ -146,7 +169,7 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
         int x, y;
         int node_index = sol_length - i - 1;
         astar_getCoordByWidth(GRID_SIZE_X, indexes[i], &x, &y);
-        wps[node_index].a = robot_pos.a;
+        wps[node_index].a = start_pos->a;
         wps[node_index].x = ASTAR_GRID_TO_BOARD_X(x);
         wps[node_index].y = ASTAR_GRID_TO_BOARD_Y(y);
     }
@@ -157,6 +180,17 @@ static int go_to_with_pathfinding(const pos2_t *target_pos)
     k_free(wps);
     LOG_INF("go_to_with_pathfinding in %dms", k_uptime_get_32() - start_time);
     return 0;
+}
+
+static int go_to_with_pathfinding_easy(const pos2_t *target_pos)
+{
+    pos2_t robot_pos;
+    poklegscom_get_pos(&robot_pos);
+    int start = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x),
+                                      BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
+    memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
+    in_use_astar_grid[start] = ASTAR_NODE_EMPTY;
+    return go_to_with_pathfinding(in_use_astar_grid, &robot_pos, target_pos);
 }
 
 static void nav_stop_all(void)
@@ -177,7 +211,7 @@ int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
     if (!current_obstacle_detected_state) {
         poklegscom_set_break(0);
     }
-    go_to_with_pathfinding(pos);
+    go_to_with_pathfinding_easy(pos);
     k_work_schedule_for_queue(&nav_workq, &recompute_path_work, K_MSEC(1000));
     k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
     k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
@@ -229,8 +263,22 @@ static void check_target_reached_work_handler(struct k_work *work)
 
 static void recompute_path_work_handler(struct k_work *work)
 {
-    LOG_INF("Recompute path");
-    go_to_with_pathfinding(&target_pos);
+    const int nb_try = 4;
+    pos2_t robot_pos;
+    int retry_counter = nb_try;
+    while (retry_counter) {
+        poklegscom_get_pos(&robot_pos);
+        memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
+        int clearance_size = nb_try - retry_counter;
+        LOG_INF("Recompute path with clearance size %d", clearance_size);
+        astar_grid_flood_fill(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y), clearance_size, ASTAR_NODE_EMPTY);
+        astar_grid_flood_fill(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(target_pos.x), BOARD_TO_ASTAR_GRID_Y(target_pos.y), clearance_size, ASTAR_NODE_EMPTY);
+        int err = go_to_with_pathfinding(in_use_astar_grid, &robot_pos, &target_pos);
+        if (!err) {
+            break;
+        }
+        retry_counter--;
+    }
     k_work_reschedule_for_queue(&nav_workq, k_work_delayable_from_work(work), K_MSEC(1000));
 }
 
@@ -258,21 +306,6 @@ void update_obstacle_detection_state(bool obstacle_detected)
     }
 }
 
-void mark_grid(char *grid, int x, int y)
-{
-    // Ensure the coordinates are within valid grid bounds
-    if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y) {
-        return; // Avoid out-of-bounds memory access
-    }
-
-    // Get the 1D index for the 2D grid coordinates
-    int grid_index = astar_getIndexByWidth(GRID_SIZE_X, x, y);
-
-    // Mark the grid cell as occupied
-    grid[grid_index] = ASTAR_NODE_FULL;
-}
-
-// Grid-Based Flood Fill
 static void add_obstacle_to_grid(char *grid, point2_t point)
 {
     int cx = BOARD_TO_ASTAR_GRID_X(point.x);
@@ -280,13 +313,7 @@ static void add_obstacle_to_grid(char *grid, point2_t point)
     int r = OBSTACLE_MARGIN * (GRID_SIZE_X - 1) / (BOARD_SIZE_X - 2 * BOARD_BORDER_MARGIN);
     // int r = OBSTACLE_MARGIN * (GRID_SIZE_Y-1) / (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN);
 
-    for (int x = -r; x <= r; x++) {
-        for (int y = -r; y <= r; y++) {
-            if (x * x + y * y <= r * r) { // Check if inside the circle
-                mark_grid(grid, cx + x, cy + y);
-            }
-        }
-    }
+    astar_grid_flood_fill(grid, cx, cy, r, ASTAR_NODE_FULL);
 }
 
 static bool is_obstacled_too_close(float angle, float distance)
