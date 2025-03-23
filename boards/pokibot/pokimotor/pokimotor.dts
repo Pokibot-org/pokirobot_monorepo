@@ -25,7 +25,9 @@
 		compatible = "gpio-leds";
 		green_led: led_0 {
 			gpios = <&gpioc 3 GPIO_ACTIVE_HIGH>;
-			label = "User LD2";
+		};
+		red_led: led_1 {
+			gpios = <&gpioc 2 GPIO_ACTIVE_HIGH>;
 		};
 	};
 
@@ -39,6 +41,7 @@
 
 	aliases {
 		led0 = &green_led;
+		led1 = &red_led;
 		mcuboot-led0 = &green_led;
 	};
 };
