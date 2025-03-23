@@ -11,6 +11,8 @@
 
 LOG_MODULE_REGISTER(poklegscom);
 
+static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_poklegs));
+
 #define ROOT_TOPIC "poklegscom/0/"
 
 pos2_t current_pos;

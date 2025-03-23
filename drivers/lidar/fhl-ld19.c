@@ -24,19 +24,22 @@ struct ld19_data {
 
 static int ld19_start(const struct device *dev)
 {
+    return 0;
 }
 
 static int ld19_stop(const struct device *dev)
 {
+    return 0;
 }
 
 static int ld19_register_callback(const struct device *dev, struct lidar_callback *clbk)
 {
+    return 0;
 }
 
 static int ld19_init(const struct device *dev)
 {
-    struct ld19_data *data = dev->data;
+    // struct ld19_data *data = dev->data;
 
     return 0;
 }
@@ -47,12 +50,12 @@ static const struct lidar_driver_api ld19_api = {
     .stop = ld19_stop,
 };
 
-#define LD19_DEFINE(inst)                                                                      \
-    static struct ld19_data ld19_data_##inst = {};                                         \
+#define LD19_DEFINE(inst)                                                                          \
+    static struct ld19_data ld19_data_##inst = {};                                                 \
                                                                                                    \
-    static const struct ld19_config ld19_config_##inst = {}; \
+    static const struct ld19_config ld19_config_##inst = {};                                       \
                                                                                                    \
-    DEVICE_DT_INST_DEFINE(inst, &ld19_init, NULL, &ld19_data_##inst,                       \
-                          &ld19_config_##inst, POST_KERNEL, 90, &ld19_api);
+    DEVICE_DT_INST_DEFINE(inst, &ld19_init, NULL, &ld19_data_##inst, &ld19_config_##inst,          \
+                          POST_KERNEL, 90, &ld19_api);
 
 DT_INST_FOREACH_STATUS_OKAY(LD19_DEFINE)

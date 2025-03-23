@@ -3,9 +3,9 @@ description: |
   Example definition in devicetree:
 
     lidar {
-        compatible = "zephyr,FHL-LD19";
+        compatible = "zephyr,fhl-ld19";
     };
 
-compatible: "zephyr,FHL-LD19"
+compatible: "zephyr,fhl-ld19"
 
 include: base.yaml

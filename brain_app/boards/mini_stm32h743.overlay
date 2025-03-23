@@ -1,14 +1,25 @@
 / {
-   	chosen {
-		pokibot,pokuicom = &pokmac_ui;
-	};
+    chosen {
+        pokibot,pokuicom = &pokmac_ui;
+        pokibot,poklegscom = &pokmac_legs;
+    };
+
+    aliases {
+        mainlidar = &lidar;
+    };
+
+
+    lidar: lidar {
+        compatible = "zephyr,fhl-ld19";
+        status = "okay";
+    };
 };
 
 &usart1 {
     status = "okay";
-   	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
-	pinctrl-names = "default";
-	current-speed = <921600>;
+    pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
+    pinctrl-names = "default";
+    current-speed = <921600>;
     pokmac_ui: pokmac_ui {
         compatible = "pokibot,pokmac";
         status = "okay";
@@ -17,9 +28,9 @@
 
 &usart2 {
     status = "okay";
-   	pinctrl-0 = <&usart2_tx_pd5 &usart2_rx_pd6>;
-	pinctrl-names = "default";
-	current-speed = <921600>;
+    pinctrl-0 = <&usart2_tx_pd5 &usart2_rx_pd6>;
+    pinctrl-names = "default";
+    current-speed = <921600>;
     pokmac_legs: pokmac_legs {
         compatible = "pokibot,pokmac";
         status = "okay";
