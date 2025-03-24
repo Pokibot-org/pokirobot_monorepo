@@ -319,7 +319,7 @@ class GameZoneVisualizer:
     def __init__(self, world: World, screen):
         self.world = world
         self.screen = screen
-        self.right_margin_ratio = 1/4
+        self.right_margin_ratio = 1/6
 
         self.real_size = [3.0, 2.0]
         self.mins = [-1.5, 0.0]
@@ -389,7 +389,7 @@ class GameZoneVisualizer:
         desired_w = min(info.current_w * (1 - self.right_margin_ratio), max_w)
         desired_h = desired_w / self.bg_ratio
         margin_h = (info.current_h - desired_h) / 2
-        background = pg.transform.scale(
+        background = pg.transform.smoothscale(
             self.bg, (desired_w, desired_h)
         )
         self.dim_x = [0, background.get_width()]

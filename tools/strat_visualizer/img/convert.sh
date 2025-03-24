@@ -1,1 +1,1 @@
-inkscape -w 2160 -h 1440 $1 -o vinyle.png
+inkscape -w 3840 -h 2560 $1 -o vinyle.png
