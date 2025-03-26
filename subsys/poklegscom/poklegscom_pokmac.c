@@ -11,7 +11,7 @@
 
 LOG_MODULE_REGISTER(poklegscom);
 
-static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_poklegs));
+static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_poklegscom));
 
 pos2_t current_pos;
 float current_dir;

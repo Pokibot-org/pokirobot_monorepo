@@ -16,22 +16,25 @@ enum pokprotocol_team received_color;
 
 static void pokuicom_receive(struct poktocol_msg *msg)
 {
-    LOG_INF("Received msg type %d", msg->type);
+    LOG_INF("Received msg type %d", msg->header.type);
 
-    switch (msg->type) {
-        case POKTOCOL_DATA_TYPE_SCORE:
+    switch (msg->header.type) {
+        case POKTOCOL_DATA_TYPE_UI_SCORE:
             break;
-        case POKTOCOL_DATA_TYPE_TEAM:
+        case POKTOCOL_DATA_TYPE_UI_TEAM:
             has_color_info = true;
             received_color = msg->data.team;
             break;
-        case POKTOCOL_DATA_TYPE_MATCH_STARTED:
+        case POKTOCOL_DATA_TYPE_UI_MATCH_STARTED:
             match_started = true;
+            break;
+        default:
             break;
     }
 }
 
-static int pokuicom_send(const struct poktocol_msg *msg) {
+static int pokuicom_send(const struct poktocol_msg *msg)
+{
     uint8_t buffer[16];
     size_t encoded_size = poktocol_encode(msg, buffer, sizeof(buffer));
     if (encoded_size < 0) {
@@ -43,14 +46,15 @@ static int pokuicom_send(const struct poktocol_msg *msg) {
 
 int pokuicom_request(enum poktocol_data_types type)
 {
-    struct poktocol_msg msg = {.cmd = POKTOCOL_CMD_TYPE_REQUEST, .type = type};
+    struct poktocol_msg msg = {.header = {.cmd = POKTOCOL_CMD_TYPE_REQUEST, .type = type}};
     return pokuicom_send(&msg);
 }
 
 void pokuicom_send_score(uint8_t score)
 {
     struct poktocol_msg msg = {
-        .cmd = POKTOCOL_CMD_TYPE_WRITE, .type = POKTOCOL_DATA_TYPE_SCORE, .data.score = score};
+        .header = {.cmd = POKTOCOL_CMD_TYPE_WRITE, .type = POKTOCOL_DATA_TYPE_UI_SCORE},
+        .data.score = score};
 
     pokuicom_send(&msg);
 }
@@ -73,7 +77,11 @@ void rx_cv(uint8_t *payload_data, size_t payload_size)
 {
     static uint8_t buffer[16];
     static struct poktocol_msg msg;
-    if (poktocol_decode(buffer, sizeof(buffer), &msg) < 0) {
+    if (poktocol_decode_header(buffer, sizeof(buffer), &msg.header) < 0) {
+        LOG_ERR("poktocol_decode error");
+        return;
+    }
+    if (poktocol_decode_data(buffer, sizeof(buffer), &msg.data) < 0) {
         LOG_ERR("poktocol_decode error");
         return;
     }

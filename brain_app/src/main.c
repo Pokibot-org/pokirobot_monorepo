@@ -43,13 +43,13 @@ int main(void)
 
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_TEAM);
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_TEAM);
         k_sleep(K_MSEC(10));
     }
     LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
 
     while (!pokuicom_is_match_started()) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_MATCH_STARTED);
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STARTED);
         k_sleep(K_MSEC(10));
     }
 
