@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 Carl Zeiss Meditec AG
+# SPDX-License-Identifier: Apache-2.0
+
+zephyr_library()
+zephyr_library_property(ALLOW_EMPTY TRUE)
+
+zephyr_library_sources_ifdef(CONFIG_STEPPER_ADI_TMC_UART adi_tmc_uart.c)
+zephyr_library_sources_ifdef(CONFIG_STEPPER_ADI_TMC2209_POKIBOT adi_tmc22xx_pokibot_stepper_controller.c)

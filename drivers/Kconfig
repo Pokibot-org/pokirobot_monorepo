@@ -2,5 +2,6 @@ menu "Pokibot libraries"
 
 rsource "lidar/Kconfig"
 rsource "pokmac/Kconfig"
+rsource "stepper/Kconfig"
 
 endmenu

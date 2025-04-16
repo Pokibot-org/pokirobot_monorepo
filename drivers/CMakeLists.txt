@@ -1,2 +1,3 @@
 add_subdirectory_ifdef(CONFIG_LIDAR lidar)
 add_subdirectory_ifdef(CONFIG_POKMAC pokmac)
+add_subdirectory_ifdef(CONFIG_STEPPER stepper)
