@@ -126,7 +126,7 @@ int msm_init(void)
         LOG_INF("Failed to connect, return code %d", rc);
         exit(EXIT_FAILURE);
     }
-    LOG_INF("Connected to MQTT broker at %s", ADDRESS);
+    LOG_INF("Connected to MQTT broker at " ADDRESS);
 
     // MQTTClient_disconnect(client, 10000);
     // MQTTClient_destroy(&client);
