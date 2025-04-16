@@ -1,5 +1,7 @@
 menuconfig SHARED_UART
 	bool "Shared UART line support"
+	default y
+	depends on DT_HAS_ZEPHYR_SHARED_UART_ENABLED
 	select SERIAL
     select UART_ASYNC_API
     select PINCTRL

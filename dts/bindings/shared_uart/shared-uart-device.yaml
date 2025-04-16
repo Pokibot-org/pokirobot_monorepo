@@ -8,5 +8,6 @@ include: base.yaml
 on-bus: shared-uart
 
 properties:
-  reg:
-    required: true
+    address:
+        type: int
+        required: true

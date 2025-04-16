@@ -76,6 +76,70 @@
 	apb2-prescaler = <1>;
 };
 
+&usart1 {
+    dmas = <&dmamux1 8 25 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+		<&dmamux1 0 24 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&usart1_tx_pc4 &usart1_rx_pc5>;
+	pinctrl-names = "default";
+	current-speed = <460800>;
+	status = "okay";
+
+	shared_uart:shared_uart {
+		compatible = "zephyr,shared-uart";
+		status = "okay";
+
+		stepper0:stepper0 {
+			compatible = "adi,tmc2209-pokibot";
+			status = "okay";
+			address = <0>;
+			micro-step-res = <1>;
+			ihold = <15>;
+			irun = <31>;
+			iholddelay = <10>;
+		};
+
+		stepper1:stepper1 {
+			compatible = "adi,tmc2209-pokibot";
+			status = "okay";
+			address = <1>;
+
+			/* common stepper controller settings */
+			micro-step-res = <1>;
+			/* tmc specific */
+			ihold = <15>;
+			irun = <31>;
+			iholddelay = <10>;
+		};
+		stepper2:stepper2 {
+			compatible = "adi,tmc2209-pokibot";
+			status = "okay";
+			address = <2>;
+
+			/* common stepper controller settings */
+			micro-step-res = <1>;
+			/* tmc specific */
+			ihold = <15>;
+			irun = <31>;
+			iholddelay = <10>;
+		};
+	};
+};
+
+&usart2 {
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pb4>;
+	pinctrl-names = "default";
+	current-speed = <460800>;
+	// status = "okay";
+};
+
+&usart3 {
+	pinctrl-0 = <&usart3_tx_pb9 &usart3_rx_pb8>;
+	pinctrl-names = "default";
+	current-speed = <460800>;
+	// status = "okay";
+};
+
 &uart4 {
 	pinctrl-0 = <&uart4_tx_pc10 &uart4_rx_pc11>;
 	pinctrl-names = "default";
@@ -132,4 +196,16 @@
 
 &rng {
 	status = "okay";
+};
+
+&dma1 {
+    status = "okay";
+};
+
+&dma2 {
+    status = "okay";
+};
+
+&dmamux1 {
+    status = "okay";
 };
