@@ -1,0 +1,25 @@
+menuconfig POKSTEPPER
+	bool "Stepper Controller pokibot flavored"
+	help
+	  Enable stepper controller pokibot flavored
+
+if POKSTEPPER
+
+module = POKSTEPPER
+module-str = pokstepper
+source "subsys/logging/Kconfig.template.log_config"
+
+config POKSTEPPER_INIT_PRIORITY
+	int "Stepper Motor Controller init priority"
+	default 90
+	help
+	  Stepper motor controller initialization priority.
+
+
+comment "Stepper Drivers pokibot flavored"
+
+# zephyr-keep-sorted-start
+rsource "adi_tmc/Kconfig"
+# zephyr-keep-sorted-stop
+
+endif

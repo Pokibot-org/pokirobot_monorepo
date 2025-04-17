@@ -1,9 +1,0 @@
-if STEPPER
-
-comment "Stepper Drivers"
-
-# zephyr-keep-sorted-start
-rsource "adi_tmc/Kconfig"
-# zephyr-keep-sorted-stop
-
-endif

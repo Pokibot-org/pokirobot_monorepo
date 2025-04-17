@@ -1,4 +1,4 @@
 add_subdirectory_ifdef(CONFIG_LIDAR lidar)
 add_subdirectory_ifdef(CONFIG_POKMAC pokmac)
-add_subdirectory_ifdef(CONFIG_STEPPER stepper)
+add_subdirectory_ifdef(CONFIG_POKSTEPPER pokstepper)
 add_subdirectory_ifdef(CONFIG_SHARED_UART shared_uart)

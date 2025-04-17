@@ -1,11 +1,11 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/stepper.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <pokibot/drivers/pokstepper.h>
 #include <pokibot/lib/pokutils.h>
 #include "control.h"
 
@@ -265,11 +265,6 @@ int control_task_wait_target(float planar_sensivity, float angular_sensivity,
     return CONTROL_WAIT_OK;
 }
 
-void stepper_set_speed(const struct device* stepper, int32_t speed) {
-    stepper_set_microstep_interval(stepper, NSEC_PER_SEC/abs(speed));
-    stepper_run(stepper, speed > 0 ? STEPPER_DIRECTION_POSITIVE : STEPPER_DIRECTION_NEGATIVE);
-}
-
 static void control_task(void *arg0, void *arg1, void *arg2)
 {
     LOG_INF("control task init");
@@ -280,9 +275,9 @@ static void control_task(void *arg0, void *arg1, void *arg2)
     float wp_dist = -1.0f;
     float dist_prev = -1.0f;
 
-    stepper_enable(obj.stepper0, true);
-    stepper_enable(obj.stepper1, true);
-    stepper_enable(obj.stepper2, true);
+    pokstepper_enable(obj.stepper0, true);
+    pokstepper_enable(obj.stepper1, true);
+    pokstepper_enable(obj.stepper2, true);
 
     bool wp_init = false;
     while (obj.ready) {
@@ -358,12 +353,10 @@ static void control_task(void *arg0, void *arg1, void *arg2)
             k_mutex_unlock(&obj.waypoints.lock);
         }
         control_set_pos(pos);
-        // SPEED was expressed in the VACTUAL unit witch what step / weird time unit that need to be computed
-        // Now expresses in USTEP / S
-        // I guess you will need a scaling factor somwhere
-        stepper_set_speed(obj.stepper0, (int32_t)(motors_v.v1 * MM_TO_USTEPS / WHEEL_PERIMETER));
-        stepper_set_speed(obj.stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
-        stepper_set_speed(obj.stepper2, (int32_t)(motors_v.v3 * MM_TO_USTEPS / WHEEL_PERIMETER));
+
+        pokstepper_set_speed(obj.stepper0, (int32_t)(motors_v.v1 * MM_TO_USTEPS / WHEEL_PERIMETER));
+        pokstepper_set_speed(obj.stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
+        pokstepper_set_speed(obj.stepper2, (int32_t)(motors_v.v3 * MM_TO_USTEPS / WHEEL_PERIMETER));
     continue_nocommit:
         // sleep
         LOG_DBG("idx: %d", obj.waypoints.idx);

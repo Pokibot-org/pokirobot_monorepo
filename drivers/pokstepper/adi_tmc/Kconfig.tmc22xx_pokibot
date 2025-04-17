@@ -1,7 +1,7 @@
-config STEPPER_ADI_TMC2209_POKIBOT
+config POKSTEPPER_ADI_TMC2209_POKIBOT
 	bool "Activate trinamic tmc2209 pokibot flavored stepper driver"
 	depends on DT_HAS_ADI_TMC2209_POKIBOT_ENABLED
-	select STEPPER_ADI_TMC_UART
+	select POKSTEPPER_ADI_TMC_UART
 	default y
 	help
 	  Stepper driver for TMC2209.

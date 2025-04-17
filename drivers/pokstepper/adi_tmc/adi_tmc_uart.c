@@ -7,7 +7,7 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/drivers/shared_uart.h>
 
-LOG_MODULE_REGISTER(tmc_uart, CONFIG_STEPPER_LOG_LEVEL);
+LOG_MODULE_REGISTER(tmc_uart, CONFIG_POKSTEPPER_LOG_LEVEL);
 
 #define SYNC_NIBBLE        0x05
 #define REG_WRITE_BIT      0x80

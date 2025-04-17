@@ -1,0 +1,22 @@
+menuconfig POKSTEPPER_ADI_TMC
+	bool "Trinamic pokibot flavored Stepper Controller"
+	depends on POKSTEPPER
+	default y
+	help
+	  Enable trinamic pokstepper controller
+
+
+if POKSTEPPER_ADI_TMC
+
+config POKSTEPPER_ADI_TMC_UART
+	bool "Use Trinamic Stepper Controller with UART"
+	depends on POKSTEPPER_ADI_TMC
+	select UART
+	help
+	  A Trinamic Stepper Controller with UART is enabled
+
+comment "Trinamic Stepper Drivers"
+
+rsource "Kconfig.tmc22xx_pokibot"
+
+endif # STEPPER_ADI_TMC
