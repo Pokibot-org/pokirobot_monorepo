@@ -1,0 +1,71 @@
+description: |
+  Analog Devices TMC2209 Stepper Motor Controller
+
+  Example:
+
+    &shared_uart0 {
+        compatible = "zephyr,shared_uart";
+        status = "okay";
+
+        tmc2209_pokibot: tmc2209_pokibot {
+            compatible = "adi,tmc2209_pokibot";
+            status = "okay";
+            address = <0>;
+
+            /* common stepper controller settings */
+            micro-step-res = <256>;
+            /* tmc specific */
+            ihold = <15>;
+            irun = <31>;
+            iholddelay = <10>;
+        };
+    };
+
+compatible: "adi,tmc2209-pokibot"
+
+include:
+  - name: shared-uart-device.yaml
+
+properties:
+  micro-step-res:
+    type: int
+    default: 256
+    enum:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      - 256
+    description: |
+      micro-step resolution to be set while initializing the device driver.
+
+  ihold:
+    required: true
+    type: int
+    default: 15
+    description: |
+      Hold current in % of run current (0-100)
+      Standstill current (0=1/32…31=32/32)
+      In combination with StealthChop mode, setting IHOLD=0 allows to choose freewheeling or coil
+      short circuit for motor stand still
+
+  irun:
+    type: int
+    default: 31
+    description: |
+      Motor run current (0=1/32…31=32/32)
+      Hint: Choose sense resistors in a way, that normal
+      IRUN is 16 to 31 for best microstep performance.
+
+  iholddelay:
+    type: int
+    default: 8
+    description: |
+      Controls the number of clock cycles for motor power down after a motion as soon as TZEROWAIT
+      has expired. The smooth transition avoids a motor jerk upon power down.
+      0: instant power down
+      1..15: Delay per current reduction step in multiple of 2^18 clocks

@@ -1,0 +1,20 @@
+menuconfig SHARED_UART
+	bool "Shared UART line support"
+	default y
+	depends on DT_HAS_ZEPHYR_SHARED_UART_ENABLED
+	select SERIAL
+    select UART_ASYNC_API
+    select PINCTRL
+
+if SHARED_UART
+
+config SHARED_UART_INIT_PRIORITY
+    int "Shared UART sys init priority"
+    default 50
+
+endif
+
+module = SHARED_UART
+module-str = Shared UART Support
+module-help = Sets log level for shared UART support
+source "subsys/logging/Kconfig.template.log_config"

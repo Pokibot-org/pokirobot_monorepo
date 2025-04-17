@@ -1,0 +1,13 @@
+# Copyright (c) 2018, Foundries.io
+# SPDX-License-Identifier: Apache-2.0
+
+# Common fields for UART devices
+
+include: base.yaml
+
+on-bus: shared-uart
+
+properties:
+    address:
+        type: int
+        required: true
