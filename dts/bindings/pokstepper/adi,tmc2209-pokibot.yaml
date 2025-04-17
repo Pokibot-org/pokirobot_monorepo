@@ -29,7 +29,7 @@ include:
 properties:
   micro-step-res:
     type: int
-    default: 1
+    default: 256
     enum:
       - 1
       - 2

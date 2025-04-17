@@ -93,7 +93,7 @@
 			compatible = "adi,tmc2209-pokibot";
 			status = "okay";
 			address = <0>;
-			micro-step-res = <1>;
+			micro-step-res = <256>;
 			ihold = <15>;
 			irun = <31>;
 			iholddelay = <10>;
@@ -105,7 +105,7 @@
 			address = <1>;
 
 			/* common stepper controller settings */
-			micro-step-res = <1>;
+			micro-step-res = <256>;
 			/* tmc specific */
 			ihold = <15>;
 			irun = <31>;
@@ -117,7 +117,7 @@
 			address = <2>;
 
 			/* common stepper controller settings */
-			micro-step-res = <1>;
+			micro-step-res = <256>;
 			/* tmc specific */
 			ihold = <15>;
 			irun = <31>;
