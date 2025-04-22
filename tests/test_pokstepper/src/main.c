@@ -9,12 +9,17 @@ const struct device *stepper0 = DEVICE_DT_GET(DT_NODELABEL(stepper0));
 int main(void)
 {
     pokstepper_enable(stepper0, true);
-    LOG_INF("Set speed +");
-    pokstepper_set_speed(stepper0, 500);
-    k_sleep(K_SECONDS(2));
-    LOG_INF("Set speed -");
-    pokstepper_set_speed(stepper0, -500);
-    k_sleep(K_SECONDS(2));
+    int32_t speed = 10;
+    int sleep_time = 1;
+    for (int i=0; i < 4; i ++) {
+        LOG_INF("Set speed +%d", speed);
+        pokstepper_set_speed(stepper0, speed);
+        k_sleep(K_SECONDS(sleep_time));
+        LOG_INF("Set speed -%d", speed);
+        pokstepper_set_speed(stepper0, -speed);
+        k_sleep(K_SECONDS(sleep_time));
+        speed *= 5;
+    }
     LOG_INF("Set speed 0");
     pokstepper_set_speed(stepper0, 0);
     pokstepper_enable(stepper0, false);
