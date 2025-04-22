@@ -1,12 +1,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/drivers/gpio.h>
 #include <pokibot/drivers/pokstepper.h>
 #include <pokibot/drivers/shared_uart.h>
 #include "adi_tmc_uart.h"
 
 LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 
-#define RESOLUTION_TO_MRES(x) (LOG2(256) - LOG2(x))
+#define RESOLUTION_TO_MRES(x)      (LOG2(256) - LOG2(x))
 // values
 #define TMC2209_VACTUAL_MAX        ((1 << 23) - 1)
 #define TMC2209_VACTUAL_MIN        (-TMC2209_VACTUAL_MAX)
@@ -51,6 +52,8 @@ LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 
 struct tmc22xx_pokibot_config {
     const struct device *shared_uart_dev;
+    struct gpio_dt_spec en;
+    struct gpio_dt_spec nstdby;
     uint8_t address;
 };
 
@@ -73,7 +76,6 @@ static int tmc22xx_rrequest(const struct device *dev, uint8_t reg, uint32_t *dat
     return tmc_reg_read(config->shared_uart_dev, config->address, reg, data);
 }
 
-
 static int tmc22xx_set_senddelay(const struct device *dev, uint32_t senddelay)
 {
     int ret = 0;
@@ -82,10 +84,12 @@ static int tmc22xx_set_senddelay(const struct device *dev, uint32_t senddelay)
     return ret;
 }
 
-static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint32_t irun, uint32_t iholddelay)
+static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint32_t irun,
+                                  uint32_t iholddelay)
 {
     int ret = 0;
-    uint32_t data = FIELD_PREP(GENMASK(4, 0), ihold) | FIELD_PREP(GENMASK(12, 8), irun) | FIELD_PREP(GENMASK(19, 16), iholddelay);
+    uint32_t data = FIELD_PREP(GENMASK(4, 0), ihold) | FIELD_PREP(GENMASK(12, 8), irun) |
+                    FIELD_PREP(GENMASK(19, 16), iholddelay);
     ret = tmc22xx_wrequest(dev, TMC2209_REG_IHOLD_IRUN, data);
     return ret;
 }
@@ -93,8 +97,8 @@ static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint
 static int tmc22xx_set_mres(const struct device *dev, uint32_t mres)
 {
     int ret = 0;
-    uint32_t gconf = (TMC2209_GCONF_DEFAULT & !FIELD_PREP(GENMASK(7, 7), 0)) |
-                     FIELD_PREP(GENMASK(7, 7), 1);
+    uint32_t gconf =
+        (TMC2209_GCONF_DEFAULT & !FIELD_PREP(GENMASK(7, 7), 0)) | FIELD_PREP(GENMASK(7, 7), 1);
     ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, gconf);
     uint32_t chopconf = (TMC2209_CHOPCONF_DEFAULT & !FIELD_PREP(GENMASK(27, 24), 0)) |
                         FIELD_PREP(GENMASK(27, 24), mres);
@@ -125,9 +129,14 @@ static int tmc22xx_get_ifcnt(const struct device *dev, uint32_t *ifcnt)
 
 static int tmc22xx_pokstepper_enable(const struct device *dev, bool enable)
 {
-    if (enable) {
-        LOG_ERR("Not implemented");
-        return -1;
+    const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
+    if (gpio_is_ready_dt(&config->en)) {
+        gpio_pin_set_dt(&config->en, enable);
+    } else {
+        if (!enable) {
+            LOG_ERR("Not implemented, driver always on");
+            return -1;
+        }
     }
     return 0;
 }
@@ -143,8 +152,16 @@ static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
 
 static int tmc22xx_pokstepper_init(const struct device *dev)
 {
-    // const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
+    const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
+
+    if (gpio_is_ready_dt(&config->en)) {
+        gpio_pin_set_dt(&config->en, 1);
+    }
+
+    if (gpio_is_ready_dt(&config->nstdby)) {
+        gpio_pin_set_dt(&config->nstdby, 1);
+    }
 
     uint32_t ifcnt;
     tmc22xx_get_ifcnt(dev, &ifcnt);
@@ -161,24 +178,25 @@ static int tmc22xx_pokstepper_init(const struct device *dev)
     return 0;
 }
 
-
 static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
     .enable = tmc22xx_pokstepper_enable,
     .set_speed = tmc22xx_pokstepper_set_speed,
 };
 
-#define TMC22XX_POKSTEPPER_DEFINE(inst)                                                       \
+#define TMC22XX_POKSTEPPER_DEFINE(inst)                                                            \
     static const struct tmc22xx_pokibot_config tmc22xx_pokibot_config_##inst = {                   \
+        .nstdby = GPIO_DT_SPEC_INST_GET_OR(inst, nstdby_gpios, {0}),                               \
+        .en = GPIO_DT_SPEC_INST_GET_OR(inst, en_gpios, {0}),                                       \
         .shared_uart_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                       \
-        .address = DT_INST_PROP(inst, address),                                                            \
+        .address = DT_INST_PROP(inst, address),                                                    \
     };                                                                                             \
     static struct tmc22xx_pokibot_data tmc22xx_pokibot_data_##inst = {                             \
         .resolution = DT_INST_PROP(inst, micro_step_res),                                          \
-        .irun = DT_INST_PROP(inst, irun),                                                         \
-        .ihold = DT_INST_PROP(inst, ihold),                                                       \
-        .iholddelay = DT_INST_PROP(inst, iholddelay),                                            \
+        .irun = DT_INST_PROP(inst, irun),                                                          \
+        .ihold = DT_INST_PROP(inst, ihold),                                                        \
+        .iholddelay = DT_INST_PROP(inst, iholddelay),                                              \
     };                                                                                             \
-    DEVICE_DT_INST_DEFINE(inst, tmc22xx_pokstepper_init, NULL, &tmc22xx_pokibot_data_##inst,  \
+    DEVICE_DT_INST_DEFINE(inst, tmc22xx_pokstepper_init, NULL, &tmc22xx_pokibot_data_##inst,       \
                           &tmc22xx_pokibot_config_##inst, POST_KERNEL,                             \
                           CONFIG_POKSTEPPER_INIT_PRIORITY, &tmc22xx_pokstepper_api);
 

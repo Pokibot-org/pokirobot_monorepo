@@ -1,0 +1,66 @@
+&subghzspi {
+	status = "disabled";
+};
+
+&pinctrl {
+	/omit-if-no-ref/ lpuart1_tx_pa2_swapped: lpuart1_tx_pa2_swapped {
+		pinmux = <STM32_PINMUX('A', 2, AF8)>;
+		bias-pull-down;
+	};
+
+	/omit-if-no-ref/ lpuart1_rx_pa3_swapped: lpuart1_rx_pa3_swapped {
+		pinmux = <STM32_PINMUX('A', 3, AF8)>;
+		bias-pull-up;
+	};
+};
+
+
+&lpuart1 {
+	pinctrl-0 = <&lpuart1_tx_pa2_swapped &lpuart1_rx_pa3_swapped>;
+	pinctrl-names = "default";
+	tx-rx-swap;
+	current-speed = <115200>;
+	fifo-enable;
+	status = "okay";
+};
+
+&usart1 {
+	status = "okay";
+	dmas = <&dmamux1 8 18 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)
+		&dmamux1 1 17 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&usart1_tx_pb6>;
+	pinctrl-1 = <&analog_pb6>;
+	pinctrl-names = "default", "sleep";
+	current-speed = <460800>;
+	single-wire;
+
+	shared_uart {
+		compatible = "zephyr,shared-uart";
+		status = "okay";
+
+		stepper0:stepper0 {
+			status = "okay";
+			compatible = "adi,tmc2209-pokibot";
+			en-gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+			nstdby-gpios = <&gpiob 9 GPIO_ACTIVE_HIGH>;
+			address = <0>;
+			micro-step-res = <256>;
+			irun = <31>;
+			ihold = <0>;
+			iholddelay = <4>;
+		};
+	};
+};
+
+&dma1 {
+	status = "okay";
+};
+
+&dma2 {
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};

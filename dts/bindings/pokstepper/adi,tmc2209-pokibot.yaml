@@ -27,6 +27,16 @@ include:
   - name: shared-uart-device.yaml
 
 properties:
+  en-gpios:
+    type: phandle-array
+    description: |
+      Enable pin power part | optional, activated by default
+
+  nstdby-gpios:
+    type: phandle-array
+    description: |
+      Enable pin logic part | optional, activated by default
+
   micro-step-res:
     type: int
     default: 256
