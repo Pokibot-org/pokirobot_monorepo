@@ -5,7 +5,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/init.h>
 #include <zephyr/logging/log.h>
-#include <pokibot/drivers/shared_uart.h>
+#include <pokibot/drivers/uart_bus.h>
 
 LOG_MODULE_REGISTER(tmc_uart, CONFIG_POKSTEPPER_LOG_LEVEL);
 
@@ -32,7 +32,7 @@ uint8_t tmc_uart_crc(uint8_t *data, uint8_t data_len)
 }
 
 // TMC r/w registers
-int tmc_reg_read(const struct device *shared_uart_dev, uint8_t slave_address, uint8_t reg,
+int tmc_reg_read(const struct device *uart_bus_dev, uint8_t slave_address, uint8_t reg,
                  uint32_t *data)
 {
     const uint8_t tx_len = 4;
@@ -43,7 +43,7 @@ int tmc_reg_read(const struct device *shared_uart_dev, uint8_t slave_address, ui
 
     tx_buf[tx_len - 1] = tmc_uart_crc(tx_buf, tx_len - 1);
 
-    if (shared_uart_send_receive(shared_uart_dev, tx_buf, tx_len, rx_len, &rx_data,
+    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, &rx_data,
                                  TMC_ANSWER_TIMEOUT)) {
         LOG_WRN("tmc reg read timeout: 0x%02x/0x%02x", slave_address, reg);
         return -ETIMEDOUT;
@@ -60,7 +60,7 @@ int tmc_reg_read(const struct device *shared_uart_dev, uint8_t slave_address, ui
     return 0;
 }
 
-int tmc_reg_write(const struct device *shared_uart_dev, uint8_t slave_address, uint8_t reg,
+int tmc_reg_write(const struct device *uart_bus_dev, uint8_t slave_address, uint8_t reg,
                   uint32_t value)
 {
 
@@ -73,7 +73,7 @@ int tmc_reg_write(const struct device *shared_uart_dev, uint8_t slave_address, u
     sys_put_be32(value, &tx_buf[3]);
     tx_buf[tx_len - 1] = tmc_uart_crc(tx_buf, tx_len - 1);
 
-    if (shared_uart_send_receive(shared_uart_dev, tx_buf, tx_len, rx_len, &rx_data,
+    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, &rx_data,
                                  TMC_ANSWER_TIMEOUT)) {
         LOG_WRN("tmc reg write timeout");
         return -ETIMEDOUT;

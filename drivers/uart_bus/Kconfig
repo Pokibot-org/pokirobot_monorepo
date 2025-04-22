@@ -1,0 +1,19 @@
+menuconfig UART_BUS
+	bool "UART Bus line support"
+	default y
+	depends on DT_HAS_ZEPHYR_UART_BUS_ENABLED
+	select SERIAL
+    select UART_ASYNC_API
+
+if UART_BUS
+
+config UART_BUS_INIT_PRIORITY
+    int "UART Bus sys init priority"
+    default 50
+
+endif
+
+module = UART_BUS
+module-str = UART bus Support
+module-help = Sets log level for UART bus support
+source "subsys/logging/Kconfig.template.log_config"

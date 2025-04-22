@@ -85,8 +85,8 @@
 	current-speed = <460800>;
 	status = "okay";
 
-	shared_uart:shared_uart {
-		compatible = "zephyr,shared-uart";
+	uart_bus:uart_bus {
+		compatible = "zephyr,uart-bus";
 		status = "okay";
 
 		stepper0:stepper0 {

@@ -2,7 +2,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/gpio.h>
 #include <pokibot/drivers/pokstepper.h>
-#include <pokibot/drivers/shared_uart.h>
+#include <pokibot/drivers/uart_bus.h>
 #include "adi_tmc_uart.h"
 
 LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
@@ -51,7 +51,7 @@ LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 #define TMC2209_ERR_SPEED_RANGE 0x2201
 
 struct tmc22xx_pokibot_config {
-    const struct device *shared_uart_dev;
+    const struct device *uart_bus_dev;
     struct gpio_dt_spec en;
     struct gpio_dt_spec nstdby;
     uint8_t address;
@@ -67,13 +67,13 @@ struct tmc22xx_pokibot_data {
 static int tmc22xx_wrequest(const struct device *dev, uint8_t reg, uint32_t data)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
-    return tmc_reg_write(config->shared_uart_dev, config->address, reg, data);
+    return tmc_reg_write(config->uart_bus_dev, config->address, reg, data);
 }
 
 static int tmc22xx_rrequest(const struct device *dev, uint8_t reg, uint32_t *data)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
-    return tmc_reg_read(config->shared_uart_dev, config->address, reg, data);
+    return tmc_reg_read(config->uart_bus_dev, config->address, reg, data);
 }
 
 static int tmc22xx_set_senddelay(const struct device *dev, uint32_t senddelay)
@@ -187,7 +187,7 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
     static const struct tmc22xx_pokibot_config tmc22xx_pokibot_config_##inst = {                   \
         .nstdby = GPIO_DT_SPEC_INST_GET_OR(inst, nstdby_gpios, {0}),                               \
         .en = GPIO_DT_SPEC_INST_GET_OR(inst, en_gpios, {0}),                                       \
-        .shared_uart_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                       \
+        .uart_bus_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                       \
         .address = DT_INST_PROP(inst, address),                                                    \
     };                                                                                             \
     static struct tmc22xx_pokibot_data tmc22xx_pokibot_data_##inst = {                             \

@@ -1,37 +1,37 @@
-#define DT_DRV_COMPAT zephyr_shared_uart
+#define DT_DRV_COMPAT zephyr_uart_bus
 
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/pinctrl.h>
-#include <pokibot/drivers/shared_uart.h>
+#include <pokibot/drivers/uart_bus.h>
 
-LOG_MODULE_REGISTER(shared_uart, CONFIG_SHARED_UART_LOG_LEVEL);
+LOG_MODULE_REGISTER(uart_bus, CONFIG_UART_BUS_LOG_LEVEL);
 
-struct shared_uart_config {
+struct uart_bus_config {
     const struct device *uart_dev;
 };
 
-struct shared_uart_data {
+struct uart_bus_data {
     struct k_mutex access_mutex;
     struct k_sem rx_ready;
-#ifdef CONFIG_SHARED_UART_LOG_LEVEL_DBG
+#ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
     int64_t t_tx_done;
     int64_t t_rx_ready;
 #endif
 };
 
-void shared_uart_callback(const struct device *dev, struct uart_event *evt, void *user_data)
+void uart_bus_callback(const struct device *dev, struct uart_event *evt, void *user_data)
 {
     const struct device *shared_dev = user_data;
-    struct shared_uart_data *data = shared_dev->data;
+    struct uart_bus_data *data = shared_dev->data;
 
     switch (evt->type) {
         case UART_TX_DONE:
-            IF_ENABLED(CONFIG_SHARED_UART_LOG_LEVEL_DBG, (data->t_tx_done = k_uptime_get()));
+            IF_ENABLED(CONFIG_UART_BUS_LOG_LEVEL_DBG, (data->t_tx_done = k_uptime_get()));
             break;
         case UART_RX_RDY:
-            IF_ENABLED(CONFIG_SHARED_UART_LOG_LEVEL_DBG, (data->t_rx_ready = k_uptime_get()));
+            IF_ENABLED(CONFIG_UART_BUS_LOG_LEVEL_DBG, (data->t_rx_ready = k_uptime_get()));
             k_sem_give(&data->rx_ready);
             break;
         case UART_RX_STOPPED:
@@ -43,13 +43,13 @@ void shared_uart_callback(const struct device *dev, struct uart_event *evt, void
     }
 }
 
-int shared_uart_send_receive(const struct device *dev, const uint8_t *tx_data, size_t tx_len,
+int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size_t tx_len,
                              size_t rx_len, uint8_t **rx_buffer, k_timeout_t timeout)
 {
-    const struct shared_uart_config *cfg = dev->config;
-    struct shared_uart_data *data = dev->data;
+    const struct uart_bus_config *cfg = dev->config;
+    struct uart_bus_data *data = dev->data;
     int ret;
-#ifdef CONFIG_SHARED_UART_LOG_LEVEL_DBG
+#ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
     int64_t t_start;
 #endif
 
@@ -70,7 +70,7 @@ int shared_uart_send_receive(const struct device *dev, const uint8_t *tx_data, s
         goto cleanup0;
     }
 
-#ifdef CONFIG_SHARED_UART_LOG_LEVEL_DBG
+#ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
     t_start = k_uptime_get();
 #endif
 
@@ -89,7 +89,7 @@ int shared_uart_send_receive(const struct device *dev, const uint8_t *tx_data, s
     /* update the rx buffer pointer to the start of rx_data */
     *rx_buffer = *rx_buffer + tx_len;
 
-#ifdef CONFIG_SHARED_UART_LOG_LEVEL_DBG
+#ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
     const int d_tx = (int)(data->t_tx_done - t_start);
     const int d_rx = rx_len > 0 ? (int)(data->t_rx_ready - data->t_tx_done) : 0;
 
@@ -108,11 +108,11 @@ cleanup0:
     return ret;
 }
 
-static int shared_uart_init(const struct device *dev)
+static int uart_bus_init(const struct device *dev)
 {
     int ret;
-    const struct shared_uart_config *cfg = dev->config;
-    struct shared_uart_data *data = dev->data;
+    const struct uart_bus_config *cfg = dev->config;
+    struct uart_bus_data *data = dev->data;
 
     if (!device_is_ready(cfg->uart_dev)) {
         return -ENODEV;
@@ -130,7 +130,7 @@ static int shared_uart_init(const struct device *dev)
         return ret;
     }
 
-    ret = uart_callback_set(cfg->uart_dev, shared_uart_callback, (void *)dev);
+    ret = uart_callback_set(cfg->uart_dev, uart_bus_callback, (void *)dev);
     if (ret < 0) {
         LOG_DBG("setting uart callback failed: %d", ret);
         return ret;
@@ -139,13 +139,13 @@ static int shared_uart_init(const struct device *dev)
     return 0;
 }
 
-#define SHARED_UART_INIT(inst)                                                                     \
-    static const struct shared_uart_config shared_uart_cfg_##inst = {                              \
+#define UART_BUS_INIT(inst)                                                                     \
+    static const struct uart_bus_config uart_bus_cfg_##inst = {                              \
         .uart_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                              \
     };                                                                                             \
-    static struct shared_uart_data shared_uart_data_##inst = {};                                   \
-    DEVICE_DT_INST_DEFINE(inst, &shared_uart_init, NULL, &shared_uart_data_##inst,                 \
-                          &shared_uart_cfg_##inst, POST_KERNEL, CONFIG_SHARED_UART_INIT_PRIORITY,  \
+    static struct uart_bus_data uart_bus_data_##inst = {};                                   \
+    DEVICE_DT_INST_DEFINE(inst, &uart_bus_init, NULL, &uart_bus_data_##inst,                 \
+                          &uart_bus_cfg_##inst, POST_KERNEL, CONFIG_UART_BUS_INIT_PRIORITY,  \
                           NULL);
 
-DT_INST_FOREACH_STATUS_OKAY(SHARED_UART_INIT)
+DT_INST_FOREACH_STATUS_OKAY(UART_BUS_INIT)

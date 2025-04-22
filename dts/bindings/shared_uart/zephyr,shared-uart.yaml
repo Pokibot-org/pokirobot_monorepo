@@ -1,6 +1,0 @@
-description: Master Slave Shared uart
-compatible: "zephyr,shared-uart"
-
-include: uart-device.yaml
-
-bus: shared-uart

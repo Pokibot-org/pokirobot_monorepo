@@ -1,0 +1,6 @@
+description: Master Slave uart bus
+compatible: "zephyr,uart-bus"
+
+include: uart-device.yaml
+
+bus: uart-bus

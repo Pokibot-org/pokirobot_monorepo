@@ -3,6 +3,6 @@ menu "Pokibot libraries"
 rsource "lidar/Kconfig"
 rsource "pokmac/Kconfig"
 rsource "pokstepper/Kconfig"
-rsource "shared_uart/Kconfig"
+rsource "uart_bus/Kconfig"
 
 endmenu

@@ -3,8 +3,8 @@ description: |
 
   Example:
 
-    &shared_uart0 {
-        compatible = "zephyr,shared_uart";
+    &uart_bus0 {
+        compatible = "zephyr,uart_bus";
         status = "okay";
 
         tmc2209_pokibot: tmc2209_pokibot {
@@ -24,7 +24,7 @@ description: |
 compatible: "adi,tmc2209-pokibot"
 
 include:
-  - name: shared-uart-device.yaml
+  - name: uart-bus-device.yaml
 
 properties:
   en-gpios:
