@@ -10,7 +10,6 @@ LOG_MODULE_REGISTER(shared_uart, CONFIG_SHARED_UART_LOG_LEVEL);
 
 struct shared_uart_config {
     const struct device *uart_dev;
-    const struct pinctrl_dev_config *pcfg;
 };
 
 struct shared_uart_data {
@@ -141,10 +140,8 @@ static int shared_uart_init(const struct device *dev)
 }
 
 #define SHARED_UART_INIT(inst)                                                                     \
-    PINCTRL_DT_DEFINE(DT_INST_PARENT(inst));                                                       \
     static const struct shared_uart_config shared_uart_cfg_##inst = {                              \
         .uart_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                              \
-        .pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_INST_PARENT(inst)),                                   \
     };                                                                                             \
     static struct shared_uart_data shared_uart_data_##inst = {};                                   \
     DEVICE_DT_INST_DEFINE(inst, &shared_uart_init, NULL, &shared_uart_data_##inst,                 \
