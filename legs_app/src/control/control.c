@@ -373,13 +373,13 @@ static void control_task(void *arg0, void *arg1, void *arg2)
 int control_init(void)
 {
     int ret = 0;
-    if (!k_mutex_init(&obj.access_mutex)){
-        LOG_ERR("Mutex init error");
+    if (k_mutex_init(&obj.access_mutex)){
+        LOG_ERR("Mutex init error access mutex");
         return -ENODEV;
     }
 
-    if (!k_mutex_init(&obj.waypoints.lock)){
-        LOG_ERR("Mutex init error");
+    if (k_mutex_init(&obj.waypoints.lock)){
+        LOG_ERR("Mutex init error waypoints lock");
         return -ENODEV;
     }
 
