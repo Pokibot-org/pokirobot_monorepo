@@ -2,5 +2,5 @@ menu "Pokibot libraries"
 
 rsource "poktocol/Kconfig"
 rsource "pokutils/Kconfig"
-
+rsource "poktrigo/Kconfig"
 endmenu

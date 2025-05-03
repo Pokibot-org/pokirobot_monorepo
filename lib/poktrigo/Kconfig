@@ -1,0 +1,4 @@
+config POKTRIGO
+	bool "Enable poktrigo library"
+	help
+	  Enable poktrigo
