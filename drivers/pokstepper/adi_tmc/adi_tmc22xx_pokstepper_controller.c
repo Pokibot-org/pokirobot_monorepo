@@ -143,6 +143,9 @@ static int tmc22xx_pokstepper_enable(const struct device *dev, bool enable)
 
 static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
 {
+    struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
+    // Speed is step per sec but the driver takes ustep per s
+    speed = data->resolution * speed;
     if (speed < TMC2209_VACTUAL_MIN || speed > TMC2209_VACTUAL_MAX) {
         return TMC2209_ERR_SPEED_RANGE;
     }
