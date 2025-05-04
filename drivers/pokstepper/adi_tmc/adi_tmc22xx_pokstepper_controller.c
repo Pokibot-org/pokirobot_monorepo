@@ -123,7 +123,6 @@ static int tmc22xx_enable_uart(const struct device *dev, bool enable)
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
     data->chopconf =
         (data->chopconf & ~GENMASK(3, 0)) | FIELD_PREP(GENMASK(3, 0), enable ? 0xF : 0);
-    LOG_INF("chopconf %x", data->chopconf);
     return tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
 }
 
