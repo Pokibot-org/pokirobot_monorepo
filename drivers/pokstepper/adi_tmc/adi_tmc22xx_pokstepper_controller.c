@@ -62,6 +62,10 @@ struct tmc22xx_pokibot_data {
     uint8_t irun;
     uint8_t ihold;
     uint8_t iholddelay;
+
+    // SHADOW REGS
+    uint32_t chopconf;
+    uint32_t gconf;
 };
 
 static int tmc22xx_wrequest(const struct device *dev, uint8_t reg, uint32_t data)
@@ -78,10 +82,8 @@ static int tmc22xx_rrequest(const struct device *dev, uint8_t reg, uint32_t *dat
 
 static int tmc22xx_set_senddelay(const struct device *dev, uint32_t senddelay)
 {
-    int ret = 0;
     uint32_t data = FIELD_PREP(GENMASK(11, 8), senddelay);
-    ret = tmc22xx_wrequest(dev, TMC2209_REG_SLAVECONF, data);
-    return ret;
+    return tmc22xx_wrequest(dev, TMC2209_REG_SLAVECONF, data);
 }
 
 static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint32_t irun,
@@ -94,23 +96,40 @@ static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint
     return ret;
 }
 
+// static int tmc22xx_set_freewheel_conf(const struct device *dev, uint8_t freewheel)
+// {
+//     uint32_t reg;
+//     if (tmc22xx_rrequest(dev, TMC2209_REG_PWMCONF, &reg)) {
+//         return -1;
+//     }
+//     reg = (reg & ~GENMASK(21, 20)) | FIELD_PREP(GENMASK(21, 20), freewheel);
+//     return tmc22xx_wrequest(dev, TMC2209_REG_PWMCONF, reg);
+// }
+
 static int tmc22xx_set_mres(const struct device *dev, uint32_t mres)
 {
+    struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
     int ret = 0;
-    uint32_t gconf =
-        (TMC2209_GCONF_DEFAULT & !FIELD_PREP(GENMASK(7, 7), 0)) | FIELD_PREP(GENMASK(7, 7), 1);
-    ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, gconf);
-    uint32_t chopconf = (TMC2209_CHOPCONF_DEFAULT & !FIELD_PREP(GENMASK(27, 24), 0)) |
-                        FIELD_PREP(GENMASK(27, 24), mres);
-    ret |= tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, chopconf);
+    data->gconf = (data->gconf & ~GENMASK(7, 7)) | FIELD_PREP(GENMASK(7, 7), 1);
+    ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, data->gconf);
+    data->chopconf =
+        (data->chopconf & ~GENMASK(27, 24)) | FIELD_PREP(GENMASK(27, 24), mres);
+    ret |= tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
     return ret;
+}
+
+static int tmc22xx_enable_uart(const struct device *dev, bool enable)
+{
+    struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
+    data->chopconf =
+        (data->chopconf & ~GENMASK(3, 0)) | FIELD_PREP(GENMASK(3, 0), enable ? 0xF : 0);
+    LOG_INF("chopconf %x", data->chopconf);
+    return tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
 }
 
 static int tmc22xx_get_ifcnt(const struct device *dev, uint32_t *ifcnt)
 {
-    int ret = 0;
-    ret = tmc22xx_rrequest(dev, TMC2209_REG_IFCNT, ifcnt);
-    return ret;
+    return tmc22xx_rrequest(dev, TMC2209_REG_IFCNT, ifcnt);
 }
 
 // static int tmc22xx_get_gconf(const struct device *dev, uint32_t *gconf)
@@ -130,13 +149,11 @@ static int tmc22xx_get_ifcnt(const struct device *dev, uint32_t *ifcnt)
 static int tmc22xx_pokstepper_enable(const struct device *dev, bool enable)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
+
     if (gpio_is_ready_dt(&config->en)) {
         gpio_pin_set_dt(&config->en, enable);
     } else {
-        if (!enable) {
-            LOG_ERR("Not implemented, driver always on");
-            return -1;
-        }
+        tmc22xx_enable_uart(dev, enable);
     }
     return 0;
 }
@@ -190,7 +207,7 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
     static const struct tmc22xx_pokibot_config tmc22xx_pokibot_config_##inst = {                   \
         .nstdby = GPIO_DT_SPEC_INST_GET_OR(inst, nstdby_gpios, {0}),                               \
         .en = GPIO_DT_SPEC_INST_GET_OR(inst, en_gpios, {0}),                                       \
-        .uart_bus_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                       \
+        .uart_bus_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                          \
         .address = DT_INST_PROP(inst, address),                                                    \
     };                                                                                             \
     static struct tmc22xx_pokibot_data tmc22xx_pokibot_data_##inst = {                             \
@@ -198,6 +215,8 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
         .irun = DT_INST_PROP(inst, irun),                                                          \
         .ihold = DT_INST_PROP(inst, ihold),                                                        \
         .iholddelay = DT_INST_PROP(inst, iholddelay),                                              \
+        .gconf = TMC2209_GCONF_DEFAULT,                                                            \
+        .chopconf = TMC2209_CHOPCONF_DEFAULT,                                                      \
     };                                                                                             \
     DEVICE_DT_INST_DEFINE(inst, tmc22xx_pokstepper_init, NULL, &tmc22xx_pokibot_data_##inst,       \
                           &tmc22xx_pokibot_config_##inst, POST_KERNEL,                             \
