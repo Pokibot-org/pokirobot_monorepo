@@ -1,0 +1,28 @@
+&usart1 {
+	status = "okay";
+	dmas = <&gpdma1 1 22 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)
+		&gpdma1 0 21 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+
+	uart_bus {
+		compatible = "zephyr,uart-bus";
+		status = "okay";
+
+		stepper0:stepper0 {
+			status = "okay";
+			compatible = "adi,tmc2209-pokibot";
+			address = <0>;
+			micro-step-res = <256>;
+			irun = <31>;
+			ihold = <1>;
+			iholddelay = <4>;
+		};
+	};
+};
+
+&gpdma1 {
+	status = "okay";
+};
