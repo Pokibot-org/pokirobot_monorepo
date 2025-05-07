@@ -39,9 +39,19 @@ struct pokmac_data {
     uint8_t receive_buffer[CONFIG_POKMAC_BUFFER_SIZE];
     uint8_t send_buffer[CONFIG_POKMAC_BUFFER_SIZE];
     sys_slist_t recv_clbks;
+    struct k_work_delayable rx_timeout_work;
     struct k_work send_ack_work;
     struct k_event rx_events;
+    bool flush_rx;
 };
+
+static void rx_timeout_work_handler(struct k_work *work)
+{
+   	struct k_work_delayable *delayable = k_work_delayable_from_work(work);
+    struct pokmac_data *data = CONTAINER_OF(delayable, struct pokmac_data, rx_timeout_work);
+    LOG_DBG("Rx timeout");
+    data->flush_rx = true;
+}
 
 static void send_frame(const struct device *dev, const uint8_t *buffer, size_t buffer_size)
 {
@@ -154,6 +164,13 @@ void pokprotocol_decode_frame(struct pokmac_data *obj)
 
 int pokprotocol_feed_byte(struct pokmac_data *obj, uint8_t byte)
 {
+    if (obj->flush_rx) {
+        LOG_DBG("Flushing rx");
+        obj->flush_rx = false;
+        obj->receiving = false;
+        obj->receive_index = 0;
+    }
+
     if (!obj->receiving) {
         // SYNCING on the 0xDEAD word
         if (byte == 0xDE && obj->receive_index == 0) {
@@ -161,6 +178,7 @@ int pokprotocol_feed_byte(struct pokmac_data *obj, uint8_t byte)
         } else if (byte == 0xAD && obj->receive_index == 1) {
             obj->receive_index = 0;
             obj->receiving = true;
+            k_work_reschedule(&obj->rx_timeout_work, K_MSEC(MAX(1, CONFIG_POKMAC_ACK_TIMEOUT_MS - 1)));
         }
     } else {
         if (obj->receive_index >= CONFIG_POKMAC_BUFFER_SIZE) {
@@ -177,6 +195,7 @@ int pokprotocol_feed_byte(struct pokmac_data *obj, uint8_t byte)
         }
         if (obj->receive_index >= POKMAC_HEADER_SIZE &&
             obj->packet_completed_index == obj->receive_index) {
+            k_work_cancel_delayable(&obj->rx_timeout_work);
             pokprotocol_decode_frame(obj);
             obj->receive_index = 0;
             obj->receiving = false;
@@ -218,6 +237,7 @@ static int pokmac_init(const struct device *dev)
     sys_slist_init(&data->recv_clbks);
     k_mutex_init(&data->uart_mutex);
     k_work_init(&data->send_ack_work, send_ack_work_handler);
+    k_work_init_delayable(&data->rx_timeout_work, rx_timeout_work_handler);
     k_event_init(&data->rx_events);
 
     uart_irq_rx_disable(cfg->uart_dev);
@@ -242,6 +262,7 @@ static const struct pokmac_driver_api pokmac_api = {.register_recv_clbk = regist
     static struct pokmac_data pokmac_data_##n = {                                                  \
         .receive_index = 0,                                                                        \
         .receiving = false,                                                                        \
+        .flush_rx = false,                                                                        \
     };                                                                                             \
                                                                                                    \
     static const struct pokmac_cfg pokmac_cfg_##n = {                                              \

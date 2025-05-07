@@ -1,9 +1,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <pokibot/drivers/pokmac.h>
+#include <zephyr/drivers/uart.h>
 
 LOG_MODULE_REGISTER(main);
 
+const struct device *uart1 = DEVICE_DT_GET(DT_ALIAS(uart1));
 const struct device *pokmac0 = DEVICE_DT_GET(DT_NODELABEL(pokmac0));
 const struct device *pokmac1 = DEVICE_DT_GET(DT_NODELABEL(pokmac1));
 
@@ -25,6 +27,26 @@ int main(void)
         return -1;
     }
 
+    LOG_INF("Sending msg confirmed");
+    if (pokmac_send(pokmac1, msg, sizeof(msg), true)) {
+        LOG_ERR("Error while sending message");
+        return -1;
+    } else {
+        LOG_INF("Sending msg confirmed OK");
+    }
+
+    LOG_INF("Messing up the uart by sending random bytes");
+    uart_poll_out(uart1, 0xDE);
+    uart_poll_out(uart1, 0xAD);
+    uart_poll_out(uart1, 9);
+    uart_poll_out(uart1, 9);
+
+    LOG_INF("Sending msg confirmed");
+    if (pokmac_send(pokmac1, msg, sizeof(msg), true)) {
+        LOG_ERR("Error while sending message as expected");
+    } else {
+        LOG_INF("Sending msg confirmed OK");
+    }
     k_sleep(K_MSEC(10));
 
     LOG_INF("Sending msg confirmed");

@@ -1,4 +1,11 @@
-&usart1 {
+/ {
+    aliases {
+        uart0 = &usart1;
+        uart1 = &usart2;
+    };
+};
+
+usart1: &usart1 {
 	status = "okay";
 	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
 	pinctrl-names = "default";
