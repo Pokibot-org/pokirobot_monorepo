@@ -4,6 +4,7 @@ config POKMAC
     depends on DT_HAS_POKIBOT_POKMAC_ENABLED
     select UART_INTERRUPT_DRIVEN
     select CRC
+    select EVENTS
         help
         Enable pokmac drivers
 
@@ -14,6 +15,10 @@ config POKMAC_INIT_PRIORITY
 config POKMAC_BUFFER_SIZE
     int "Pokmac buffer size"
     default 128
+
+config POKMAC_ACK_TIMEOUT_MS
+    int "Pokmac ACK timeout"
+    default 10
 
 module = POKMAC
 module-str = pokmac

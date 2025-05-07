@@ -21,7 +21,7 @@ struct pokmac_recv_callback {
 
 
 typedef int (*pokmac_api_register_recv_callback)(const struct device *dev, struct pokmac_recv_callback *clbk);
-typedef int (*pokmac_api_send)(const struct device *dev, uint8_t *data, size_t size);
+typedef int (*pokmac_api_send)(const struct device *dev, uint8_t *data, size_t size, bool confirmed);
 
 /**
  * @brief LIDAR driver API
@@ -42,7 +42,7 @@ static inline int pokmac_register_recv_callback(const struct device *dev, struct
 	return api->register_recv_clbk(dev, clbk);
 }
 
-static inline int pokmac_send(const struct device *dev, uint8_t *payload_data, size_t payload_size)
+static inline int pokmac_send(const struct device *dev, uint8_t *payload_data, size_t payload_size, bool confirmed)
 {
 	const struct pokmac_driver_api *api =
 		(const struct pokmac_driver_api *)dev->api;
@@ -50,7 +50,7 @@ static inline int pokmac_send(const struct device *dev, uint8_t *payload_data, s
 	if (api->send == NULL) {
 		return -ENOSYS;
 	}
-	return api->send(dev, payload_data, payload_size);
+	return api->send(dev, payload_data, payload_size, confirmed);
 }
 
 #ifdef __cplusplus

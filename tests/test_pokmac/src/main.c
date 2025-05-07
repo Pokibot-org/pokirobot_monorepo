@@ -17,12 +17,22 @@ struct pokmac_recv_callback clbk0_struct = {.cb = clbk0};
 
 int main(void)
 {
-    LOG_INF("Sending msg");
     pokmac_register_recv_callback(pokmac0, &clbk0_struct);
     char msg[] = "HI!";
-    if (pokmac_send(pokmac1, msg, sizeof(msg))) {
+    LOG_INF("Sending msg unconfirmed");
+    if (pokmac_send(pokmac1, msg, sizeof(msg), false)) {
         LOG_ERR("Error while sending message");
         return -1;
+    }
+
+    k_sleep(K_MSEC(10));
+
+    LOG_INF("Sending msg confirmed");
+    if (pokmac_send(pokmac1, msg, sizeof(msg), true)) {
+        LOG_ERR("Error while sending message");
+        return -1;
+    } else {
+        LOG_INF("Sending msg confirmed OK");
     }
     return 0;
 }

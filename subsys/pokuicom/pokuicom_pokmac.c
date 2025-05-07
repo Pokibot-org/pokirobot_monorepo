@@ -41,7 +41,7 @@ static int pokuicom_send(const struct poktocol_msg *msg)
         LOG_ERR("Encode error");
         return -1;
     }
-    return pokmac_send(pokmac_dev, buffer, encoded_size);
+    return pokmac_send(pokmac_dev, buffer, encoded_size, false);
 }
 
 int pokuicom_request(enum poktocol_data_types type)
