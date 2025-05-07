@@ -12,13 +12,15 @@
 #include <zephyr/sys/slist.h>
 #include <zephyr/drivers/uart.h>
 #include <pokibot/drivers/lidar.h>
+#include <math.h>
 
-LOG_MODULE_REGISTER(ld19);
+LOG_MODULE_REGISTER(ld19, CONFIG_LIDAR_LOG_LEVEL);
 
 #define DT_DRV_COMPAT zephyr_fhl_ld19
 
-#define LD_DEG_TO_RAD(_deg) ((_deg) / 180.0f * 3.14159265358979323846f)
-#define MAX_LIDAR_POINTS    400
+#define LD_M_PI                3.14159265358979323846f
+#define LD_DEG_TO_RAD(_deg) ((_deg) / 180.0f *LD_M_PI)
+#define MAX_LIDAR_POINTS    600
 
 #define LD19_MAX_BUFFER_SIZE      128
 #define LD19_PKG_HEADER           0x54
@@ -100,6 +102,15 @@ static uint8_t ld19_crc8(const uint8_t *data, uint8_t data_len)
     return crc;
 }
 
+static float ld19_angle_normalize(float a)
+{
+    a = fmodf(a + LD_M_PI, 2 * LD_M_PI);
+    if (a < 0) {
+        a += 2 * LD_M_PI;
+    }
+    return a - LD_M_PI;
+}
+
 static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *measure)
 {
     bool can_be_published = false;
@@ -115,7 +126,7 @@ static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *m
     for (int i = 0; i < nb_measure_points; i++) {
         struct lidar_point current_point = {
             .distance = (float)measure->point[i].distance / 1000,
-            .angle = LD_DEG_TO_RAD(start_angle_deg + step_deg * i),
+            .angle = ld19_angle_normalize(-LD_DEG_TO_RAD(start_angle_deg + step_deg * i)),
             .intensity = measure->point[i].intensity,
         };
         data->points[data->nb_points] = current_point;
@@ -126,7 +137,7 @@ static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *m
         }
 
         // Has done a full scan
-        if (current_point.angle < data->last_angle) {
+        if (current_point.angle > data->last_angle) {
             can_be_published = true;
         }
         data->last_angle = current_point.angle;
@@ -221,12 +232,14 @@ void call_callbacks_work_handler(struct k_work *work)
         struct lidar_callback *cb = CONTAINER_OF(cur, struct lidar_callback, _node);
         cb->clbk(data->points, data->nb_points, cb->user_data);
     }
+    data->nb_points = 0;
 }
 
 static int ld19_start(const struct device *dev)
 {
     const struct ld19_config *config = dev->config;
     uart_irq_rx_enable(config->uart_dev);
+    LOG_DBG("Lidar rx start");
     return 0;
 }
 
@@ -234,6 +247,7 @@ static int ld19_stop(const struct device *dev)
 {
     const struct ld19_config *config = dev->config;
     uart_irq_rx_disable(config->uart_dev);
+    LOG_DBG("Lidar rx stop");
     return 0;
 }
 

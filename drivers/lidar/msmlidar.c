@@ -12,7 +12,7 @@
 #include <pokibot/drivers/lidar.h>
 #include <zephyr/data/json.h>
 
-LOG_MODULE_REGISTER(msmlidar);
+LOG_MODULE_REGISTER(msmlidar, CONFIG_LIDAR_LOG_LEVEL);
 
 #define DT_DRV_COMPAT pokibot_msmlidar
 

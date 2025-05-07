@@ -16,4 +16,8 @@ config LIDAR_MSMLIDAR
    	depends on DT_HAS_POKIBOT_MSMLIDAR_ENABLED
     select JSON_LIBRARY
 
+module = LIDAR
+module-str = lidar
+source "subsys/logging/Kconfig.template.log_config"
+
 endif

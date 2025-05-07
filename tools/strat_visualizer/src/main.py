@@ -287,9 +287,8 @@ class LidarSim(SimPart):
         obstacle_shape = unary_union([obstacle.get_shape() for _, obstacle in self.world.obstacles.items()])
         to_send_point_list = []
         for i in range(self.resolution):
-            # Lidar is going clockwise that's why theres is a -
             lidar_angle = i/self.resolution * 2 * np.pi
-            table_angle = -lidar_angle + self.robot.pos[2]
+            table_angle = lidar_angle + self.robot.pos[2]
             dir = [np.cos(table_angle), np.sin(table_angle)]
             robot_pos = Point(self.robot.pos[0:2])
             shapely_point = get_closest_collision_point(obstacle_shape, robot_pos , Point(dir))
