@@ -1,4 +1,3 @@
-#include "zephyr/sys/slist.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,6 +7,7 @@
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/slist.h>
 #include <pokibot/msm.h>
 #include <pokibot/drivers/lidar.h>
 #include <zephyr/data/json.h>
