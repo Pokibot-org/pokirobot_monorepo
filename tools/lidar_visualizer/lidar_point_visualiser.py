@@ -7,8 +7,8 @@ import math
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--device", default="/dev/ttyACM0")
-parser.add_argument("-b", "--baudrate", default=921600)
-parser.add_argument("-l", "--limit", default=4)
+parser.add_argument("-b", "--baudrate", default=921600, type=int)
+parser.add_argument("-l", "--limit", default=4, type=int)
 args = parser.parse_args()
 
 mutex = threading.Lock()
