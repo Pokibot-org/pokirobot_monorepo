@@ -76,6 +76,10 @@ void pokprotocol_decode_mac(struct pokmac_data *obj)
     // Dont care for now no ack is implemented
     // uint8_t cmd = receive_buffer[0];
     uint16_t payload_size = (uint16_t)obj->receive_buffer[1] << 8 | obj->receive_buffer[2];
+    if (payload_size > CONFIG_POKMAC_BUFFER_SIZE - POKMAC_RESERVED_SIZE) {
+        LOG_ERR("Payload size too big");
+        return;
+    }
     uint8_t *payload = &obj->receive_buffer[3];
     size_t crc_start = POKMAC_HEADER_SIZE + payload_size;
     uint16_t recv_crc = (uint16_t)obj->receive_buffer[crc_start] | (uint16_t)obj->receive_buffer[crc_start + 1] << 8;
