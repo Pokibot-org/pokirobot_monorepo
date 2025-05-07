@@ -6,12 +6,21 @@ LOG_MODULE_REGISTER(main);
 
 const struct device *lidar_dev = DEVICE_DT_GET(DT_NODELABEL(lidar));
 
+// Use this with the lidar visualizer tool
+const int decimation = 4;
+int decimation_counter = 0;
+
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void *user_data)
 {
+    LOG_RAW("LP|");
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
-        LOG_RAW("LD>%0.3f;%0.3f,%d", (double)point->angle, (double)point->distance, point->intensity);
+        decimation_counter = (decimation_counter + 1) % decimation;
+        if (!decimation_counter) {
+            LOG_RAW(">%0.3f;%0.3f", (double)point->angle, (double)point->distance);
+        }
     }
+    LOG_RAW("\n");
 }
 
 int main(void)

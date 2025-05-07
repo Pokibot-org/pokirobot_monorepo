@@ -1,3 +1,7 @@
+&usart3 {
+	current-speed = <921600>;
+};
+
 usart1: &usart1 {
 	status = "okay";
 	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
