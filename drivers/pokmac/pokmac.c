@@ -8,7 +8,7 @@
 #include <zephyr/logging/log.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(pokmac_driver);
+LOG_MODULE_REGISTER(pokmac_driver, CONFIG_POKMAC_LOG_LEVEL);
 
 #define POKMAC_SYNC_SIZE   2
 #define POKMAC_HEADER_SIZE 3
@@ -45,28 +45,27 @@ static int send(const struct device *dev, uint8_t *payload_buffer, size_t payloa
     if (frame_size > CONFIG_POKMAC_BUFFER_SIZE) {
         return -ENOMEM;
     }
+    // SYNC
     data->send_buffer[0] = 0xDE;
     data->send_buffer[1] = 0xAD;
-
+    // HEADER
     data->send_buffer[2] = 1; // WRITE NO ACK
-
     data->send_buffer[3] = payload_size >> 8;
     data->send_buffer[4] = payload_size & 0xFFU;
-    // APPLICATIF
+    // APP
     memcpy(&data->send_buffer[5], payload_buffer, payload_size);
-
-    // Unused crc
+    // CRC
     size_t crc_index = frame_size - POKMAC_CRC_SIZE;
     uint16_t crc = crc16_ansi(&data->send_buffer[POKMAC_SYNC_SIZE], frame_size - POKMAC_CRC_SIZE - POKMAC_SYNC_SIZE);
     data->send_buffer[crc_index] = crc;
     data->send_buffer[crc_index + 1] = crc >> 8;
 
+    LOG_DBG("Sending msg, payload size %d, crc %X", payload_size, crc);
+    // SENDING
     k_mutex_lock(&data->uart_mutex, K_FOREVER);
-
-    for (size_t i = 0; i < payload_size; i++) {
-        uart_poll_out(cfg->uart_dev, payload_buffer[i]);
+    for (size_t i = 0; i < frame_size; i++) {
+        uart_poll_out(cfg->uart_dev, data->send_buffer[i]);
     }
-
     k_mutex_unlock(&data->uart_mutex);
 
     return 0;
@@ -80,7 +79,9 @@ void pokprotocol_decode_mac(struct pokmac_data *obj)
     uint8_t *payload = &obj->receive_buffer[3];
     size_t crc_start = POKMAC_HEADER_SIZE + payload_size;
     uint16_t recv_crc = (uint16_t)obj->receive_buffer[crc_start] | (uint16_t)obj->receive_buffer[crc_start + 1] << 8;
-    uint16_t crc = crc16_ansi(obj->send_buffer, payload_size - POKMAC_CRC_SIZE);
+    uint16_t crc = crc16_ansi(obj->receive_buffer, obj->receive_index - POKMAC_CRC_SIZE);
+    LOG_DBG("Received msg, payload size %d, crc %X", payload_size, crc);
+
     if (crc != recv_crc) {
         LOG_ERR("Wrong crc");
         return;
