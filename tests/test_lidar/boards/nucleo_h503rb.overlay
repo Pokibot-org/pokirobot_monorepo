@@ -1,0 +1,11 @@
+usart1: &usart1 {
+	status = "okay";
+	pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
+	pinctrl-names = "default";
+	current-speed = <230400>;
+
+    lidar: lidar {
+        compatible = "zephyr,fhl-ld19";
+        status = "okay";
+    };
+};
