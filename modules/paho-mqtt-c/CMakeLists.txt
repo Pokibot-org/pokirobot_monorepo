@@ -1,7 +1,7 @@
 if(${CONFIG_NATIVE_MQTT})
 
     cmake_minimum_required(VERSION 3.11)
-
+    set(CMAKE_C_STANDARD 99)
     # Include the FetchContent module
     include(FetchContent)
 
