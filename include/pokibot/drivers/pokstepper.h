@@ -46,4 +46,4 @@ static inline int pokstepper_set_speed(const struct device *dev, int32_t speed)
 }
 #endif
 
-#endif /* ZEPHYR_INCLUDE_DRIVERS_LIDAR_H_ */
+#endif /* POKIBOT_INCLUDE_DRIVERS_POKSTEPPER_H_ */
