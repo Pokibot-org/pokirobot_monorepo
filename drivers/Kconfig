@@ -4,5 +4,6 @@ rsource "lidar/Kconfig"
 rsource "pokmac/Kconfig"
 rsource "pokstepper/Kconfig"
 rsource "uart_bus/Kconfig"
+rsource "servomotor/Kconfig"
 
 endmenu

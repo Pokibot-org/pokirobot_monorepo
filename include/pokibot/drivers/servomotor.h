@@ -9,8 +9,9 @@
 extern "C" {
 #endif
 
-
-
+/*
+* Angle in radians
+*/
 typedef int (*servomotor_api_set_angle)(const struct device *dev, float angle);
 
 struct servomotor_driver_api {

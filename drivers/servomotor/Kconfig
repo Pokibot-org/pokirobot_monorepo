@@ -1,0 +1,21 @@
+menuconfig SERVOMOTOR
+    bool "Enable servomotor drivers"
+        default n
+
+if SERVOMOTOR
+
+config SERVOMOTOR_INIT_PRIORITY
+    int "Servomotor init priority"
+	default 60
+
+config PWM_SERVOMOTOR
+    bool "Enable pwm servomotor drivers"
+        default y
+    depends on DT_HAS_POKIBOT_PWM_SERVOMOTOR_ENABLED
+    select PWM
+
+module = SERVOMOTOR
+module-str = servomotor
+source "subsys/logging/Kconfig.template.log_config"
+
+endif
