@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/counter.h>
 #include <pokibot/drivers/pokstepper.h>
 #include <pokibot/drivers/uart_bus.h>
 #include "adi_tmc_uart.h"
@@ -54,10 +55,15 @@ struct tmc22xx_pokibot_config {
     const struct device *uart_bus_dev;
     struct gpio_dt_spec en;
     struct gpio_dt_spec nstdby;
+    struct gpio_dt_spec step_pin;
+    struct gpio_dt_spec dir_pin;
+    const struct device *counter;
     uint8_t address;
 };
 
 struct tmc22xx_pokibot_data {
+    int32_t pos;
+    bool has_known_pos;
     uint16_t resolution;
     uint8_t irun;
     uint8_t ihold;
@@ -67,6 +73,13 @@ struct tmc22xx_pokibot_data {
     uint32_t chopconf;
     uint32_t gconf;
 };
+
+static bool tmc22xx_can_do_step_dir(const struct device *dev)
+{
+    const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
+    return device_is_ready(config->counter) && gpio_is_ready_dt(&config->step_pin) &&
+           gpio_is_ready_dt(&config->dir_pin);
+}
 
 static int tmc22xx_wrequest(const struct device *dev, uint8_t reg, uint32_t data)
 {
@@ -112,8 +125,7 @@ static int tmc22xx_set_mres(const struct device *dev, uint32_t mres)
     int ret = 0;
     data->gconf = (data->gconf & ~GENMASK(7, 7)) | FIELD_PREP(GENMASK(7, 7), 1);
     ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, data->gconf);
-    data->chopconf =
-        (data->chopconf & ~GENMASK(27, 24)) | FIELD_PREP(GENMASK(27, 24), mres);
+    data->chopconf = (data->chopconf & ~GENMASK(27, 24)) | FIELD_PREP(GENMASK(27, 24), mres);
     ret |= tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
     return ret;
 }
@@ -166,6 +178,7 @@ static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
         return TMC2209_ERR_SPEED_RANGE;
     }
     tmc22xx_wrequest(dev, TMC2209_REG_VACTUAL, speed);
+    data->has_known_pos = false;
     return 0;
 }
 
@@ -208,6 +221,9 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
         .en = GPIO_DT_SPEC_INST_GET_OR(inst, en_gpios, {0}),                                       \
         .uart_bus_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                          \
         .address = DT_INST_PROP(inst, address),                                                    \
+        .step_pin = GPIO_DT_SPEC_GET_OR(inst, step_gpios, {0}),                                    \
+        .dir_pin = GPIO_DT_SPEC_GET_OR(inst, dir_gpios, {0}),                                      \
+        .counter = DEVICE_DT_GET_OR_NULL(DT_PHANDLE(inst, counter)),                               \
     };                                                                                             \
     static struct tmc22xx_pokibot_data tmc22xx_pokibot_data_##inst = {                             \
         .resolution = DT_INST_PROP(inst, micro_step_res),                                          \
@@ -216,7 +232,8 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
         .iholddelay = DT_INST_PROP(inst, iholddelay),                                              \
         .gconf = TMC2209_GCONF_DEFAULT,                                                            \
         .chopconf = TMC2209_CHOPCONF_DEFAULT,                                                      \
-    };                                                                                             \
+        .pos = 0,                                                                                  \
+        .has_known_pos = false};                                                                   \
     DEVICE_DT_INST_DEFINE(inst, tmc22xx_pokstepper_init, NULL, &tmc22xx_pokibot_data_##inst,       \
                           &tmc22xx_pokibot_config_##inst, POST_KERNEL,                             \
                           CONFIG_POKSTEPPER_INIT_PRIORITY, &tmc22xx_pokstepper_api);

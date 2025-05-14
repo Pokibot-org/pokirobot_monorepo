@@ -79,3 +79,18 @@ properties:
       has expired. The smooth transition avoids a motor jerk upon power down.
       0: instant power down
       1..15: Delay per current reduction step in multiple of 2^18 clocks
+
+  step-gpios:
+    type: phandle-array
+    description: |
+      The GPIO pins used to send step signals to the stepper motor.
+
+  dir-gpios:
+    type: phandle-array
+    description: |
+      The GPIO pins used to send direction signals to the stepper motor.
+      Pin will be driven high for forward direction and low for reverse direction.
+
+  counter:
+    type: phandle
+    description: Counter used for generating step-accurate pulse signals.
