@@ -3,6 +3,7 @@ config POKSTEPPER_ADI_TMC2209_POKIBOT
 	depends on DT_HAS_ADI_TMC2209_POKIBOT_ENABLED
 	select POKSTEPPER_ADI_TMC_UART
 	select COUNTER
+	select EVENTS
 	default y
 	help
 	  Stepper driver for TMC2209.
