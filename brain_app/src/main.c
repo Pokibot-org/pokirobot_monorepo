@@ -13,6 +13,21 @@ enum team_color {
     TEAM_COLOR_YELLOW,
 };
 
+#define STRAT_GRADIN_SCORE_LV1              4
+#define STRAT_GRADIN_SCORE_LV2              8
+#define STRAT_GRADIN_SCORE_LV3              16
+#define STRAT_BANNER_SCORE                  20
+#define STRAT_SHOWTIME_GROUPIE_SCORE        5
+#define STRAT_SHOWTIME_SINGER_SCORE         5
+#define STRAT_SHOWTIME_SINGER_ZONE_SCORE    10 // Depends on whant we can do
+#define STRAT_SHOWTIME_EVERYONE_PARTY_SCORE 10
+#define STRAT_END_GAME_IN_BACKSTAGE_SCORE   10
+
+
+
+
+
+
 struct point2 convert_point_for_team(enum team_color color, struct point2 point)
 {
     if (color == TEAM_COLOR_BLUE) {
