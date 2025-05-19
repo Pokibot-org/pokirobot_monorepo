@@ -48,7 +48,10 @@ bool had_a_target_pos = false;
 #define GRID_SIZE_Y (2 * GRID_REZ + 1)
 #define GRID_SIZE_X (3 * GRID_REZ + 1)
 #define BOARD_BORDER_MARGIN ROBOT_RADIUS
-#define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + 0.05f)
+#define COLLISION_MARGIN    0.05f
+#define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + COLLISION_MARGIN)
+
+#define BOARD_TO_ASTAR_GRID_DIM(x) ((x) * (GRID_SIZE_X - 1) / (BOARD_SIZE_X - 2 * BOARD_BORDER_MARGIN))
 
 #define BOARD_TO_ASTAR_GRID_X(x)                                                                   \
     (MIN(MAX((int)((x - BOARD_MIN_X - BOARD_BORDER_MARGIN) * (GRID_SIZE_X - 1) /                   \
@@ -70,6 +73,7 @@ bool had_a_target_pos = false;
 static char astar_grids[2][GRID_SIZE_Y * GRID_SIZE_X];
 static int current_astar_grid = 0;
 static char in_use_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
+static char static_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 
 static const pos2_t sensivity = {
     .x = 0.01f,
@@ -91,13 +95,34 @@ static void astar_mark_grid(char *grid, int x, int y, char value)
     grid[grid_index] = value;
 }
 
-static void astar_grid_flood_fill(char *grid, int cx, int cy, int r, char value)
+static void astar_grid_flood_fill_circle(char *grid, int cx, int cy, int r, char value)
 {
     for (int x = -r; x <= r; x++) {
         for (int y = -r; y <= r; y++) {
             if (x * x + y * y <= r * r) { // Check if inside the circle
                 astar_mark_grid(grid, cx + x, cy + y, value);
             }
+        }
+    }
+}
+
+static void astar_grid_flood_fill_rectangle_with_margin(char *grid, int cx, int cy, int width, int height, int margin, char value)
+{
+    astar_grid_flood_fill_circle(grid, cx - width / 2, cy - height / 2, margin, value);
+    astar_grid_flood_fill_circle(grid, cx - width / 2, cy + height / 2, margin, value);
+    astar_grid_flood_fill_circle(grid, cx + width / 2, cy - height / 2, margin, value);
+    astar_grid_flood_fill_circle(grid, cx + width / 2, cy + height / 2, margin, value);
+
+    int width_w_margin = width + margin * 2;
+    int height_w_margin = height + margin * 2;
+    for (int x = -width_w_margin / 2 ; x <= width_w_margin / 2; x++) {
+        for (int y = -height_w_margin / 2; y <= height_w_margin / 2; y++) {
+            if ((x < -width / 2 || x > width / 2) && (y < -height / 2 || y > height / 2)) {
+                continue;
+            }
+            int gx = cx + x;
+            int gy = cy + y;
+            astar_mark_grid(grid, gx, gy, value);
         }
     }
 }
@@ -280,8 +305,8 @@ static void recompute_path_work_handler(struct k_work *work)
         memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
         int clearance_size = nb_try - retry_counter;
         LOG_INF("Recompute path with clearance size %d", clearance_size);
-        astar_grid_flood_fill(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y), clearance_size, ASTAR_NODE_EMPTY);
-        astar_grid_flood_fill(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(target_pos.x), BOARD_TO_ASTAR_GRID_Y(target_pos.y), clearance_size, ASTAR_NODE_EMPTY);
+        astar_grid_flood_fill_circle(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(robot_pos.x), BOARD_TO_ASTAR_GRID_Y(robot_pos.y), clearance_size, ASTAR_NODE_EMPTY);
+        astar_grid_flood_fill_circle(in_use_astar_grid, BOARD_TO_ASTAR_GRID_X(target_pos.x), BOARD_TO_ASTAR_GRID_Y(target_pos.y), clearance_size, ASTAR_NODE_EMPTY);
         int err = go_to_with_pathfinding(in_use_astar_grid, &robot_pos, &target_pos);
         if (!err) {
             break;
@@ -321,14 +346,34 @@ void update_obstacle_detection_state(bool obstacle_detected)
     }
 }
 
-static void add_obstacle_to_grid(char *grid, point2_t point)
+
+static void add_rectangle_obstacle_to_grid(char *grid, point2_t point, float_t width, float height)
+{
+    int rx = BOARD_TO_ASTAR_GRID_X(point.x);
+    int ry = BOARD_TO_ASTAR_GRID_Y(point.y);
+    int astar_width = BOARD_TO_ASTAR_GRID_DIM(width);
+    int astar_height = BOARD_TO_ASTAR_GRID_DIM(height);
+    int margin = BOARD_TO_ASTAR_GRID_DIM(ROBOT_RADIUS + COLLISION_MARGIN);
+
+    astar_grid_flood_fill_rectangle_with_margin(grid, rx, ry, astar_width, astar_height, margin, ASTAR_NODE_FULL);
+}
+
+static void add_circle_obstacle_to_grid(char *grid, point2_t point, float_t radius)
 {
     int cx = BOARD_TO_ASTAR_GRID_X(point.x);
     int cy = BOARD_TO_ASTAR_GRID_Y(point.y);
-    int r = OBSTACLE_MARGIN * (GRID_SIZE_X - 1) / (BOARD_SIZE_X - 2 * BOARD_BORDER_MARGIN);
-    // int r = OBSTACLE_MARGIN * (GRID_SIZE_Y-1) / (BOARD_SIZE_Y - 2*BOARD_BORDER_MARGIN);
+    int r = BOARD_TO_ASTAR_GRID_DIM(ROBOT_RADIUS + COLLISION_MARGIN + radius);
 
-    astar_grid_flood_fill(grid, cx, cy, r, ASTAR_NODE_FULL);
+    astar_grid_flood_fill_circle(grid, cx, cy, r, ASTAR_NODE_FULL);
+}
+
+static void add_lidar_point_obstacle_to_grid(char *grid, point2_t point)
+{
+    int cx = BOARD_TO_ASTAR_GRID_X(point.x);
+    int cy = BOARD_TO_ASTAR_GRID_Y(point.y);
+    int r = BOARD_TO_ASTAR_GRID_DIM(OBSTACLE_MARGIN);
+
+    astar_grid_flood_fill_circle(grid, cx, cy, r, ASTAR_NODE_FULL);
 }
 
 static bool is_obstacled_too_close(float angle, float distance)
@@ -351,7 +396,7 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
 
     int next_astar_grid = (current_astar_grid + 1) % 2;
     char *grid = astar_grids[current_astar_grid];
-    memset(grid, ASTAR_NODE_EMPTY, sizeof(astar_grids[0]));
+    memcpy(grid, static_astar_grid, sizeof(static_astar_grid));
     bool obstacle_detected = false;
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
@@ -384,11 +429,29 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
             obstacle_detected = true;
         }
 
-        add_obstacle_to_grid(grid, lidar_point2);
+        add_lidar_point_obstacle_to_grid(grid, lidar_point2);
     }
     current_astar_grid = next_astar_grid;
     update_obstacle_detection_state(obstacle_detected);
 }
+
+void nav_clear_obstacles(void) {
+    memset(static_astar_grid, ASTAR_NODE_EMPTY, sizeof(static_astar_grid));
+};
+
+void nav_register_obstacle(struct nav_obstacle *obs) {
+    switch (obs->type) {
+        case NAV_OBSTACLE_TYPE_CIRCLE:
+        add_circle_obstacle_to_grid(static_astar_grid, obs->data.circle.point, obs->data.circle.radius);
+        break;
+        case NAV_OBSTACLE_TYPE_RECTANGLE:
+        {
+            const struct nav_obstacle_rectangle *rec = &obs->data.rectangle;
+            add_rectangle_obstacle_to_grid(static_astar_grid, rec->point, rec->width, rec->height);
+        }
+        break;
+    }
+};
 
 int nav_init(void)
 {
@@ -397,6 +460,7 @@ int nav_init(void)
     };
 
     memset(astar_grids, ASTAR_NODE_EMPTY, sizeof(astar_grids));
+    nav_clear_obstacles();
 
     poklegscom_set_break(1);
     k_work_queue_start(&nav_workq, nav_workq_stack, K_THREAD_STACK_SIZEOF(nav_workq_stack), 8,

@@ -23,10 +23,19 @@ enum team_color {
 #define STRAT_SHOWTIME_EVERYONE_PARTY_SCORE 10
 #define STRAT_END_GAME_IN_BACKSTAGE_SCORE   10
 
-
-
-
-
+struct nav_obstacle static_obstacles[] = {
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = -0.4f,
+                .y = 0.95f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
+        }
+    }
+};
 
 struct point2 convert_point_for_team(enum team_color color, struct point2 point)
 {
@@ -55,6 +64,10 @@ struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
 int main(void)
 {
     LOG_INF("Pokibot main start");
+
+    for (int i = 0; i < ARRAY_SIZE(static_obstacles); i++) {
+        nav_register_obstacle(&static_obstacles[i]);
+    }
 
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {

@@ -10,11 +10,38 @@
 #define NAV_EVENT_CANCELED            BIT(2)
 #define ALL_NAV_EVENTS                (NAV_EVENT_DESTINATION_REACHED | NAV_EVENT_TIMEOUT | NAV_EVENT_CANCELED)
 
+enum nav_obstacle_type {
+    NAV_OBSTACLE_TYPE_CIRCLE,
+    NAV_OBSTACLE_TYPE_RECTANGLE,
+};
+
+struct nav_obstacle_circle {
+    point2_t point;
+    float radius;
+};
+
+struct nav_obstacle_rectangle {
+    point2_t point;
+    float width;
+    float height;
+};
+
+struct nav_obstacle {
+    enum nav_obstacle_type type;
+    union {
+        struct nav_obstacle_circle circle;
+        struct nav_obstacle_rectangle rectangle;
+    } data;
+};
+
+
 int nav_set_pos(const pos2_t *pos);
 int nav_set_break(bool status);
 int nav_go_to(const pos2_t *pos, k_timeout_t timeout);
 int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout);
 void nav_cancel(void);
 void nav_wait_events(uint32_t *events);
+void nav_clear_obstacles(void);
+void nav_register_obstacle(struct nav_obstacle *obs);
 
 #endif
