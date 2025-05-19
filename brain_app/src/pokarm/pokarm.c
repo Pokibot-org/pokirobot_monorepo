@@ -5,8 +5,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(pokarm);
 
-const struct device *stepper = DEVICE_DT_GET(DT_NODELABEL(stepper_arm));
-const struct device *servo_deploy = DEVICE_DT_GET(DT_NODELABEL(servo_deploy_arm));
+// const struct device *stepper = DEVICE_DT_GET(DT_NODELABEL(stepper_arm));
+// const struct device *servo_deploy = DEVICE_DT_GET(DT_NODELABEL(servo_deploy_arm));
 
 
 void pokarm_reset_pos(void) {
