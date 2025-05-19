@@ -15,4 +15,9 @@ aliases {
         status = "okay";
         compatible = "pokibot,empty-pokstepper";
     };
+
+    servo_deploy_arm: servo_deploy_arm {
+        status = "okay";
+        compatible = "pokibot,empty-servomotor";
+    };
 };

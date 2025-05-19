@@ -1,0 +1,5 @@
+description: Empty servomotor
+
+compatible: "pokibot,empty-servomotor"
+
+include: base.yaml

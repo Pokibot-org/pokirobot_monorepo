@@ -14,6 +14,12 @@ config PWM_SERVOMOTOR
     depends on DT_HAS_POKIBOT_PWM_SERVOMOTOR_ENABLED
     select PWM
 
+config EMPTY_SERVOMOTOR
+    bool "Enable empty servomotor drivers"
+        default y
+    depends on DT_HAS_POKIBOT_EMPTY_SERVOMOTOR_ENABLED
+
+
 module = SERVOMOTOR
 module-str = servomotor
 source "subsys/logging/Kconfig.template.log_config"

@@ -1,2 +1,3 @@
 zephyr_library()
 zephyr_library_sources_ifdef(CONFIG_PWM_SERVOMOTOR pwm_servomotor.c)
+zephyr_library_sources_ifdef(CONFIG_EMPTY_SERVOMOTOR empty_servomotor.c)
