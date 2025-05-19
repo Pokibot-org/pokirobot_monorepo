@@ -58,8 +58,6 @@ LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 #define STEPPER_OK    0
 #define STEPPER_STALL 1
 
-#define TMC2209_STALLGUARD_POLL_PERIOD K_MSEC(5)
-
 struct tmc22xx_pokibot_config {
     const struct device *uart_bus_dev;
     struct gpio_dt_spec en;
@@ -68,12 +66,16 @@ struct tmc22xx_pokibot_config {
     struct gpio_dt_spec dir_pin;
     const struct device *counter;
     uint8_t address;
+    int sg_nb_consecutive_trigger;
+    int sg_poll_period_ms;
+    int initial_sg_poll_period_ms;
 };
 
 struct tmc22xx_pokibot_data {
     const struct device *self;
 
     int32_t pos;
+    int32_t mstep_pos_in_fullstep;
     bool has_known_pos;
     uint16_t resolution;
     uint8_t irun;
@@ -86,6 +88,7 @@ struct tmc22xx_pokibot_data {
     struct k_event move_events;
 
     uint8_t sg_threshold;
+    uint8_t nb_sg_confirmations;
     struct k_work_delayable poll_stallguard_dwork;
 
     struct counter_top_cfg counter_top_cfg;
@@ -192,8 +195,19 @@ static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
 static bool tmc22xx_can_do_step_dir(const struct device *dev)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
-    return device_is_ready(config->counter) && gpio_is_ready_dt(&config->step_pin) &&
-           gpio_is_ready_dt(&config->dir_pin);
+    if (!device_is_ready(config->counter)) {
+        LOG_ERR("Counter not ready");
+        return false;
+    }
+    if (!gpio_is_ready_dt(&config->step_pin)) {
+        LOG_ERR("step_pin not ready");
+        return false;
+    }
+    if (!gpio_is_ready_dt(&config->dir_pin)) {
+        LOG_ERR("dir_pin not ready");
+        return false;
+    }
+    return true;
 }
 
 static int tmc22xx_pokstepper_set_pos(const struct device *dev, int32_t pos)
@@ -220,6 +234,10 @@ static void step_counter_top_interrupt(const struct device *_dev, void *user_dat
 
     gpio_pin_toggle_dt(&config->step_pin);
     if (!gpio_pin_get_dt(&config->step_pin)) {
+        data->mstep_pos_in_fullstep += 1;
+        if (data->mstep_pos_in_fullstep != data->resolution) {
+            return;
+        }
         data->pos += data->pos_increment;
         if (data->pos == data->target_pos) {
             counter_stop(config->counter);
@@ -231,21 +249,43 @@ static void step_counter_top_interrupt(const struct device *_dev, void *user_dat
 static void poll_stallguard_dwork_handler(struct k_work *work)
 {
     struct k_work_delayable *dwork = k_work_delayable_from_work(work);
-    struct tmc22xx_pokibot_data *data = CONTAINER_OF(dwork, struct tmc22xx_pokibot_data, poll_stallguard_dwork );
+    struct tmc22xx_pokibot_data *data =
+        CONTAINER_OF(dwork, struct tmc22xx_pokibot_data, poll_stallguard_dwork);
     const struct device *dev = data->self;
     const struct tmc22xx_pokibot_config *config = dev->config;
 
     uint8_t sg;
     tmc22xx_get_sg_result(dev, &sg);
+    // LOG_DBG("sg %d", sg);
     if (sg <= data->sg_threshold) {
+        data->nb_sg_confirmations += 1;
+    } else {
+        data->nb_sg_confirmations = 0;
+    }
+
+    if (data->nb_sg_confirmations >= config->sg_nb_consecutive_trigger) {
         counter_stop(config->counter);
         k_event_set(&data->move_events, MOVE_EVENT_STALL);
     } else {
-        k_work_reschedule(dwork, TMC2209_STALLGUARD_POLL_PERIOD);
+        k_work_reschedule(dwork, K_MSEC(config->sg_poll_period_ms));
     }
+
+#if CONFIG_POKSTEPPER_LOG_LEVEL_DBG
+    static uint32_t last_print_ms = 0;
+    uint8_t smallest_sg = 0;
+    if (sg < smallest_sg) {
+        smallest_sg = sg;
+    }
+    if (k_uptime_get_32() - last_print_ms > 1000) {
+        LOG_DBG("sg %d", sg);
+        last_print_ms = k_uptime_get_32();
+        smallest_sg = 0;
+    }
+#endif
 }
 
-static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos, uint8_t stall_threshold)
+static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos,
+                uint8_t stall_threshold)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
@@ -257,27 +297,41 @@ static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos
     int32_t steps = target_pos - data->pos;
     bool direction = steps >= 0;
     data->pos_increment = direction ? +1 : -1;
+    data->mstep_pos_in_fullstep = 0;
     gpio_pin_set_dt(&config->dir_pin, direction);
-    uint32_t step_interval_ns = NSEC_PER_SEC / speed_sps;
-    data->counter_top_cfg.ticks =
-        DIV_ROUND_UP(counter_get_frequency(config->counter) * step_interval_ns / 2, NSEC_PER_SEC);
-    counter_set_top_value(config->counter, &data->counter_top_cfg);
+    uint32_t step_interval_ns = NSEC_PER_SEC / speed_sps / data->resolution;
+    LOG_DBG("step_interval_ns %d", step_interval_ns);
+
+    data->counter_top_cfg.ticks = DIV_ROUND_UP(
+        (uint64_t)counter_get_frequency(config->counter) * step_interval_ns / 2, NSEC_PER_SEC);
+    LOG_DBG("Top counter ticks %d", data->counter_top_cfg.ticks);
+    if (counter_set_top_value(config->counter, &data->counter_top_cfg)) {
+        LOG_ERR("Counter cant set top value");
+        return -EIO;
+    }
 
     k_event_clear(&data->move_events, 0xFFFFFFFF);
     uint32_t events_to_wait = MOVE_EVENT_OK;
     if (stall_threshold) {
-        data->sg_threshold =  stall_threshold;
+        data->sg_threshold = stall_threshold;
+        data->nb_sg_confirmations = 0;
         events_to_wait |= MOVE_EVENT_STALL;
-        k_work_reschedule(&data->poll_stallguard_dwork, TMC2209_STALLGUARD_POLL_PERIOD);
+        k_work_reschedule(&data->poll_stallguard_dwork, K_MSEC(config->initial_sg_poll_period_ms));
     }
 
-    counter_start(config->counter);
+    int err = counter_start(config->counter);
+    if (err) {
+        LOG_ERR("Counter start error %d", err);
+        return err;
+    }
     uint32_t events = k_event_wait(&data->move_events, events_to_wait, false,
                                    K_MSEC(1000 * (abs(steps) + 2) / speed_sps));
     counter_stop(config->counter);
     if (events & MOVE_EVENT_OK) {
+        LOG_DBG("Move ok");
         return STEPPER_OK;
     } else if (events & MOVE_EVENT_STALL) {
+        LOG_DBG("Move stall");
         return STEPPER_STALL;
     }
     return -ETIMEDOUT;
@@ -344,21 +398,19 @@ static int tmc22xx_pokstepper_init(const struct device *dev)
         data->counter_top_cfg.flags = 0;
         data->counter_top_cfg.ticks = counter_us_to_ticks(config->counter, 1000000);
 
-        ret = gpio_pin_configure_dt(&config->step_pin, GPIO_OUTPUT);
+        ret = gpio_pin_configure_dt(&config->step_pin, GPIO_OUTPUT_LOW);
         if (ret < 0) {
             LOG_ERR("Failed to configure step pin: %d", ret);
             return ret;
         }
 
-        ret = gpio_pin_configure_dt(&config->dir_pin, GPIO_OUTPUT);
+        ret = gpio_pin_configure_dt(&config->dir_pin, GPIO_OUTPUT_LOW);
         if (ret < 0) {
             LOG_ERR("Failed to configure dir pin: %d", ret);
             return ret;
         }
 
-        gpio_pin_set_dt(&config->step_pin, 0);
-        gpio_pin_set_dt(&config->dir_pin, 0);
-
+        k_event_init(&data->move_events);
         k_work_init_delayable(&data->poll_stallguard_dwork, poll_stallguard_dwork_handler);
     }
     LOG_DBG("tmc22xx <%p> init ok", (void *)dev);
@@ -377,13 +429,16 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
 
 #define TMC22XX_POKSTEPPER_DEFINE(inst)                                                            \
     static const struct tmc22xx_pokibot_config tmc22xx_pokibot_config_##inst = {                   \
-        .nstdby = GPIO_DT_SPEC_INST_GET_OR(inst, nstdby_gpios, {0}),                               \
-        .en = GPIO_DT_SPEC_INST_GET_OR(inst, en_gpios, {0}),                                       \
+        .nstdby = GPIO_DT_SPEC_INST_GET_OR(DT_DRV_INST(inst), nstdby_gpios, {0}),                  \
+        .en = GPIO_DT_SPEC_INST_GET_OR(DT_DRV_INST(inst), en_gpios, {0}),                          \
         .uart_bus_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                          \
         .address = DT_INST_PROP(inst, address),                                                    \
-        .step_pin = GPIO_DT_SPEC_GET_OR(inst, step_gpios, {0}),                                    \
-        .dir_pin = GPIO_DT_SPEC_GET_OR(inst, dir_gpios, {0}),                                      \
-        .counter = DEVICE_DT_GET_OR_NULL(DT_PHANDLE(inst, counter)),                               \
+        .sg_nb_consecutive_trigger = DT_INST_PROP_OR(inst, sg_nb_consecutive_trigger, 2),          \
+        .sg_poll_period_ms = DT_INST_PROP_OR(inst, sg_poll_period_ms, 2),                          \
+        .initial_sg_poll_period_ms = DT_INST_PROP_OR(inst, initial_sg_poll_period_ms, 1),          \
+        .step_pin = GPIO_DT_SPEC_GET_OR(DT_DRV_INST(inst), step_gpios, {0}),                       \
+        .dir_pin = GPIO_DT_SPEC_GET_OR(DT_DRV_INST(inst), dir_gpios, {0}),                         \
+        .counter = DEVICE_DT_GET_OR_NULL(DT_PHANDLE(DT_DRV_INST(inst), counter)),                  \
     };                                                                                             \
     static struct tmc22xx_pokibot_data tmc22xx_pokibot_data_##inst = {                             \
         .resolution = DT_INST_PROP(inst, micro_step_res),                                          \

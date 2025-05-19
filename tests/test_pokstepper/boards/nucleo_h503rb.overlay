@@ -14,12 +14,27 @@
 		stepper0:stepper0 {
 			status = "okay";
 			compatible = "adi,tmc2209-pokibot";
+			counter = <&counter>;
+			step-gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
+			dir-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+
 			address = <0>;
 			micro-step-res = <256>;
-			irun = <31>;
+			irun = <8>;
 			ihold = <1>;
 			iholddelay = <4>;
+			sg-poll-period-ms = <2>;
+			initial-sg-poll-period-ms = <10>;
+			sg-nb-consecutive-trigger = <4>;
 		};
+	};
+};
+
+&timers2 {
+	st,prescaler = <100>;
+	status = "okay";
+	counter: counter {
+		status = "okay";
 	};
 };
 
