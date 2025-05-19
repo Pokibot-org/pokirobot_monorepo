@@ -1,0 +1,18 @@
+identifier: interco_weact_h743
+name: WeAct Studio MiniSTM32H743 Core Board interco pokibot flavored
+type: mcu
+arch: arm
+toolchain:
+    - zephyr
+    - gnuarmemb
+ram: 512
+flash: 2048
+supported:
+    - gpio
+    - counter
+    - spi
+    - backup_sram
+    - watchdog
+    - qspi
+    - video
+vendor: weact

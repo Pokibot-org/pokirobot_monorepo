@@ -1,0 +1,6 @@
+board:
+    name: interco_weact_h743
+    full_name: interco_weact_h743 Core Board
+    vendor: pokibot
+    socs:
+        - name: stm32h743xx
