@@ -196,28 +196,8 @@ struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
     return pos;
 }
 
-int main(void)
-{
-    LOG_INF("Pokibot main start");
-
-    for (int i = 0; i < ARRAY_SIZE(static_obstacles); i++) {
-        nav_register_obstacle(&static_obstacles[i]);
-    }
-
-    enum pokprotocol_team color;
-    while (pokuicom_get_team_color(&color)) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_UI_TEAM);
-        k_sleep(K_MSEC(10));
-    }
-    LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
-
-    while (!pokuicom_is_match_started()) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STARTED);
-        k_sleep(K_MSEC(10));
-    }
-
-    LOG_INF("Match started");
-
+#if CONFIG_POKISTRAT_MAIN
+int match(enum pokprotocol_team color) {
     pos2_t start_pos = {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0.0f};
     nav_set_pos(&start_pos);
 
@@ -241,5 +221,63 @@ int main(void)
     nav_wait_events(&nav_events);
 
     k_sleep(K_FOREVER);
+    return 0;
+}
+#else
+// FOR CERTIF
+int match(enum pokprotocol_team color) {
+    const pos2_t start_pos = {
+        .x = BOARD_MIN_X + 1.775f,
+        .y = 0.225f,
+        .a = 0.0f
+    };
+    nav_set_pos(&start_pos);
+    nav_set_break(false);
+
+    pos2_t waypoints[] = {
+        {.x = start_pos.x, .y = 0.6f, .a = 0},
+        {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = M_PI},
+        {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = M_PI},
+    };
+
+    LOG_INF("Leaving start zone");
+    uint32_t nav_events;
+    nav_go_to_direct(&waypoints[0], K_FOREVER);
+    nav_wait_events(&nav_events);
+    LOG_INF("Left start zone");
+    nav_go_to_direct(&waypoints[1], K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(&waypoints[2], K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    k_sleep(K_FOREVER);
+    return 0;
+}
+#endif
+
+int main(void)
+{
+    LOG_INF("Pokibot main start");
+
+    for (int i = 0; i < ARRAY_SIZE(static_obstacles); i++) {
+        nav_register_obstacle(&static_obstacles[i]);
+    }
+
+    LOG_INF("Regiter static obstacles OK");
+
+    enum pokprotocol_team color;
+    while (pokuicom_get_team_color(&color)) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_TEAM);
+        k_sleep(K_MSEC(10));
+    }
+    LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
+
+    while (!pokuicom_is_match_started()) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STARTED);
+        k_sleep(K_MSEC(10));
+    }
+
+    LOG_INF("Match started");
+    match(color);
     return 0;
 }

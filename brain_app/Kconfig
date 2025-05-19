@@ -4,4 +4,15 @@ endmenu
 
 menu "PokiSettings"
 
+choice POKISTRAT
+	prompt "POKISTRAT choice"
+	default POKISTRAT_MAIN
+
+config POKISTRAT_MAIN
+	bool "Main pokistrat"
+
+config POKISTRAT_CERTIF
+    bool "Pokistrat for certification"
+endchoice
+
 endmenu
