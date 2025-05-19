@@ -78,7 +78,7 @@ static char static_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 static const pos2_t sensivity = {
     .x = 0.01f,
     .y = 0.01f,
-    .a = DEG_TO_RAD(2),
+    .a = DEG_TO_RAD(2.0f),
 };
 
 static void astar_mark_grid(char *grid, int x, int y, char value)
