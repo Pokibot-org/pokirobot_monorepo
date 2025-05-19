@@ -164,6 +164,14 @@ struct nav_obstacle static_obstacles[] = {
     },
 };
 
+// DEFINE EVERYTHING FOR BLUE
+
+const pos2_t start_pos = {
+    .x = BOARD_MIN_X + 1.775f,
+    .y = 0.225f,
+    .a = 0.0f
+};
+
 struct point2 convert_point_for_team(enum team_color color, struct point2 point)
 {
     if (color == TEAM_COLOR_BLUE) {
