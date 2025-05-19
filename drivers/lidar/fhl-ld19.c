@@ -27,7 +27,7 @@ LOG_MODULE_REGISTER(ld19, CONFIG_LIDAR_LOG_LEVEL);
 #define LD19_DATA_PKG_INFO        0x2C
 #define LD19_HEALTH_PKG_INFO      0xE0
 #define LD19_MANUFACT_PKG_INF     0x0F
-#define LD19_DATA_LEN             12 * 3 + 11
+#define LD19_DATA_LEN             (12 * 3 + 11)
 #define LD19_DATA_HEALTH_LEN      12
 #define LD19_DATA_MANUFACTURE_LEN 12
 
@@ -121,11 +121,11 @@ static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *m
         diff_deg += 360.0f;
     }
     const int nb_measure_points = 12;
-    float step_deg = diff_deg / nb_measure_points;
+    float step_deg = diff_deg / ((float)nb_measure_points);
 
     for (int i = 0; i < nb_measure_points; i++) {
         struct lidar_point current_point = {
-            .distance = (float)measure->point[i].distance / 1000,
+            .distance = (float)(measure->point[i].distance) / 1000.0f,
             .angle = ld19_angle_normalize(-LD_DEG_TO_RAD(start_angle_deg + step_deg * i)),
             .intensity = measure->point[i].intensity,
         };
