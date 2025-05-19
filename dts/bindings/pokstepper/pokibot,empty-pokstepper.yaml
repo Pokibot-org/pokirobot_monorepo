@@ -1,0 +1,5 @@
+description: Empty pokstepper
+
+compatible: "pokibot,empty-pokstepper"
+
+include: base.yaml

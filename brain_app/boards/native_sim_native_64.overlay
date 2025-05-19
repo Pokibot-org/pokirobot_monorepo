@@ -10,4 +10,9 @@ aliases {
         compatible = "pokibot,msmlidar";
         id = <0>;
     };
+
+    stepper_arm: stepper_arm {
+        status = "okay";
+        compatible = "pokibot,empty-pokstepper";
+    };
 };

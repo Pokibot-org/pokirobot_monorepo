@@ -15,6 +15,12 @@ config POKSTEPPER_INIT_PRIORITY
 	help
 	  Stepper motor controller initialization priority.
 
+config POKSTEPPER_POKIBOT_EMPTY_POKSTEPPER
+	bool "Activate empty pokibot flavored stepper driver"
+	depends on DT_HAS_POKIBOT_EMPTY_POKSTEPPER_ENABLED
+	default y
+	help
+	  Empty stepper driver.
 
 comment "Stepper Drivers pokibot flavored"
 

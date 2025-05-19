@@ -8,6 +8,7 @@ target_include_directories(app PRIVATE src)
 target_sources(app PRIVATE
     src/main.c
     src/nav/nav.c
+    src/pokarm/pokarm.c
     src/astar-jps/IndexPriorityQueue.c
     src/astar-jps/AStar.c
 )
