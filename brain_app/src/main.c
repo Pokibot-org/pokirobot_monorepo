@@ -24,6 +24,30 @@ enum team_color {
 #define STRAT_END_GAME_IN_BACKSTAGE_SCORE   10
 
 struct nav_obstacle static_obstacles[] = {
+    // RAMPE
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = 0.0f,
+                .y = 1.90f,
+            },
+            .width = 1.7f,
+            .height = 0.2f,
+        }
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = 0.0f,
+                .y = 1.65f,
+            },
+            .width = 0.9f,
+            .height = 0.3f,
+        }
+    },
+    // MIDDLE OBSTACLES
     (struct nav_obstacle) {
         .type = NAV_OBSTACLE_TYPE_RECTANGLE,
         .data.rectangle = {
@@ -33,8 +57,111 @@ struct nav_obstacle static_obstacles[] = {
             },
             .width = 0.4f,
             .height = 0.1f,
+        },
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = 0.4f,
+                .y = 0.95f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
         }
-    }
+    },
+    // TOP CENTER
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MIN_X + 0.825f,
+                .y = 1.725f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
+        }
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MAX_X - 0.825f,
+                .y = 1.725f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
+        }
+    },
+    // BOTTOM CENTER
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MIN_X + 0.775f,
+                .y = 0.25f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
+        }
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MAX_X - 0.775f,
+                .y = 0.25f,
+            },
+            .width = 0.4f,
+            .height = 0.1f,
+        }
+    },
+    // BOTTOM LR
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MIN_X + 0.075f,
+                .y = 0.4f,
+            },
+            .width = 0.1f,
+            .height = 0.4f,
+        }
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MAX_X - 0.075f,
+                .y = 0.4f,
+            },
+            .width = 0.1f,
+            .height = 0.4f,
+        }
+    },
+    // TOP LR
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MIN_X + 0.075f,
+                .y = 1.325f,
+            },
+            .width = 0.1f,
+            .height = 0.4f,
+        }
+    },
+    (struct nav_obstacle) {
+        .type = NAV_OBSTACLE_TYPE_RECTANGLE,
+        .data.rectangle = {
+            .point = {
+                .x = BOARD_MAX_X - 0.075f,
+                .y = 1.325f,
+            },
+            .width = 0.1f,
+            .height = 0.4f,
+        }
+    },
 };
 
 struct point2 convert_point_for_team(enum team_color color, struct point2 point)

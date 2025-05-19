@@ -30,7 +30,7 @@ int poklegscom_set_pos(const pos2_t *pos)
 }
 
 int poklegscom_set_waypoints(const pos2_t *waypoints, size_t nb_waypoints) {
-    static char topic_buff[2048];
+    static char topic_buff[4096];
     int size = sizeof(topic_buff);
     int offset = 0;
     offset += snprintf(topic_buff, size, "[");
