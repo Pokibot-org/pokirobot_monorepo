@@ -15,6 +15,13 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nav);
 
+enum nav_mode {
+    NAV_MODE_DIRECT,
+    NAV_MODE_WITH_PATHFINDING
+};
+
+enum nav_mode current_mode = NAV_MODE_DIRECT;
+
 const struct device *lidar_dev = DEVICE_DT_GET(DT_ALIAS(mainlidar));
 
 K_EVENT_DEFINE(nav_events);
@@ -208,6 +215,7 @@ int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
     had_a_target_pos = true;
+    current_mode = NAV_MODE_WITH_PATHFINDING;
     if (!current_obstacle_detected_state) {
         poklegscom_set_break(0);
     }
@@ -224,6 +232,7 @@ int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout)
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
     had_a_target_pos = true;
+    current_mode = NAV_MODE_DIRECT;
     if (!current_obstacle_detected_state) {
         poklegscom_set_break(0);
     }
@@ -288,6 +297,19 @@ static void timeout_work_handler(struct k_work *work)
     k_event_set(&nav_events, NAV_EVENT_TIMEOUT);
 }
 
+void obstacle_detection_event_handler(bool obstacle_detected) {
+    if (obstacle_detected) {
+        LOG_INF("Obstacle detected");
+        poklegscom_set_break(1);
+        if (current_mode == NAV_MODE_WITH_PATHFINDING) {
+            k_work_reschedule_for_queue(&nav_workq, &recompute_path_work, K_NO_WAIT);
+        }
+    } else {
+        LOG_INF("No obstacle detected");
+        poklegscom_set_break(0);
+    }
+}
+
 void update_obstacle_detection_state(bool obstacle_detected)
 {
     if (current_obstacle_detected_state != obstacle_detected) {
@@ -295,14 +317,7 @@ void update_obstacle_detection_state(bool obstacle_detected)
         if (!had_a_target_pos) {
             return;
         }
-        if (obstacle_detected) {
-            LOG_INF("Obstacle detected");
-            poklegscom_set_break(1);
-            k_work_reschedule_for_queue(&nav_workq, &recompute_path_work, K_NO_WAIT);
-        } else {
-            LOG_INF("No obstacle detected");
-            poklegscom_set_break(0);
-        }
+        obstacle_detection_event_handler(obstacle_detected);
     }
 }
 
