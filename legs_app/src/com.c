@@ -37,6 +37,7 @@ void publish_work_handler(struct k_work *work)
 
 
 static void com_rx_payload(uint8_t *payload_data, size_t payload_size) {
+    LOG_DBG("rx data of size %d", payload_size);
     struct poktocol_header msg;
     if (poktocol_decode_header(payload_data, payload_size, &msg)) {
         LOG_ERR("Header decode error");

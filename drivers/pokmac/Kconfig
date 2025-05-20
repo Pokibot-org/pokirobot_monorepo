@@ -14,7 +14,7 @@ config POKMAC_INIT_PRIORITY
 
 config POKMAC_BUFFER_SIZE
     int "Pokmac buffer size"
-    default 128
+    default 512
 
 config POKMAC_ACK_TIMEOUT_MS
     int "Pokmac ACK timeout"
