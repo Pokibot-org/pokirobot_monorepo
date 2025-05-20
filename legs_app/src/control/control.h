@@ -5,6 +5,7 @@
 
 int control_set_pos(pos2_t pos);
 int control_get_pos(pos2_t *pos);
+int control_get_dir(float *dir);
 int control_set_brake(bool brake);
 int control_set_waypoints(pos2_t *src, int n);
 

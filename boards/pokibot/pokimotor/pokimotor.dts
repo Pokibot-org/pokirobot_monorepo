@@ -147,6 +147,18 @@
 	status = "okay";
 };
 
+&lpuart1 {
+	pinctrl-0 = <&lpuart1_tx_pb11 &lpuart1_rx_pa3>;
+	pinctrl-names = "default";
+	current-speed = <921600>;
+	status = "okay";
+    pokmac_strat: pokmac_strat {
+		compatible = "pokibot,pokmac";
+		status = "okay";
+	};
+};
+
+
 
 &timers2 {
 	status = "okay";

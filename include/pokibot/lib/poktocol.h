@@ -18,11 +18,17 @@ enum poktocol_data_types {
     POKTOCOL_DATA_TYPE_LEGS_DIR,
     POKTOCOL_DATA_TYPE_LEGS_BREAK,
     POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS,
+    POKTOCOL_DATA_TYPE_LEGS_NAV_DATA,
 };
 
 enum pokprotocol_team {
     POKTOCOL_TEAM_BLUE,
     POKTOCOL_TEAM_YELLOW,
+};
+
+struct pokprotocol_nav_data {
+    pos2_t pos;
+    float dir;
 };
 
 union poktocol_msg_data
@@ -32,6 +38,7 @@ union poktocol_msg_data
     pos2_t legs_pos;
     float legs_dir;
     bool legs_break;
+    struct pokprotocol_nav_data legs_nav_data;
     struct {
         pos2_t *wps;
         size_t nb_wps;

@@ -108,6 +108,12 @@ int control_get_pos(pos2_t *pos)
     return 0;
 }
 
+int control_get_dir(float *dir)
+{
+    *dir = obj.dir_angle;
+    return 0;
+}
+
 static int control_get_pos_internal(pos2_t *pos)
 {
     if (k_mutex_lock(&obj.access_mutex, K_MSEC(CONTROL_PERIOD_MS))) {

@@ -15,9 +15,10 @@ static int pokprotocol_encode_dir(uint8_t *buffer, size_t buffer_size, const flo
     return size;
 }
 
-static void pokprotocol_decode_dir(const uint8_t *buffer, float *dir)
+static int pokprotocol_decode_dir(const uint8_t *buffer, float *dir)
 {
     memcpy(dir, buffer, sizeof(float));
+    return sizeof(float);
 }
 
 static int pokprotocol_encode_pos(uint8_t *buffer, size_t buffer_size, const pos2_t *pos)
@@ -31,9 +32,10 @@ static int pokprotocol_encode_pos(uint8_t *buffer, size_t buffer_size, const pos
     return size;
 }
 
-static void pokprotocol_decode_pos(const uint8_t *buffer, pos2_t *pos)
+static int pokprotocol_decode_pos(const uint8_t *buffer, pos2_t *pos)
 {
     memcpy(pos, buffer, sizeof(pos2_t));
+    return sizeof(pos2_t);
 }
 
 int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buffer_size)
@@ -88,6 +90,21 @@ int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buff
                 index += ret;
             }
             break;
+        case POKTOCOL_DATA_TYPE_LEGS_NAV_DATA: {
+            int ret;
+            ret = pokprotocol_encode_pos(&buffer[index], buffer_size - index,
+                                         &msg->data.legs_nav_data.pos);
+            if (ret < 0) {
+                return -1;
+            }
+            index += ret;
+            ret = pokprotocol_encode_dir(&buffer[index], buffer_size - index,
+                                         &msg->data.legs_nav_data.dir);
+            if (ret < 0) {
+                return -1;
+            }
+            index += ret;
+        } break;
         default:
             return -1; // Unknown data type
     }
@@ -151,6 +168,10 @@ int poktocol_decode_data(const uint8_t *buffer, size_t buffer_size, union poktoc
                 pokprotocol_decode_pos(&buffer[index], &data->waypoints.wps[i]);
             }
             break;
+        case POKTOCOL_DATA_TYPE_LEGS_NAV_DATA: {
+            index += pokprotocol_decode_pos(&buffer[index], &data->legs_nav_data.pos);
+            index += pokprotocol_decode_dir(&buffer[index], &data->legs_nav_data.dir);
+        } break;
         default:
             return -1; // Unknown data type
     }
