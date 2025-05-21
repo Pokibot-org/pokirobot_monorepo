@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(pokuicom);
+LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
 bool match_started = false;
 bool has_color_info = false;

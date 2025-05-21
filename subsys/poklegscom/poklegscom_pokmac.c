@@ -5,7 +5,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(poklegscom);
+LOG_MODULE_REGISTER(poklegscom, CONFIG_POKLEGSCOM_LOG_LEVEL);
 
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_poklegscom));
 uint8_t tx_buffer[512];

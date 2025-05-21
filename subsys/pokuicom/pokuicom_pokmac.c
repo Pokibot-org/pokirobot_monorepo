@@ -6,7 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(pokuicom);
+LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_pokuicom));
 
@@ -46,6 +46,7 @@ static int pokuicom_send(const struct poktocol_msg *msg)
 
 int pokuicom_request(enum poktocol_data_types type)
 {
+    LOG_DBG("Sending request of type %d", type);
     struct poktocol_msg msg = {.header = {.cmd = POKTOCOL_CMD_TYPE_REQUEST, .type = type}};
     return pokuicom_send(&msg);
 }

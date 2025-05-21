@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(nav);
+LOG_MODULE_REGISTER(nav, CONFIG_NAV_LOG_LEVEL);
 
 enum nav_mode {
     NAV_MODE_DIRECT,
@@ -236,6 +236,7 @@ static void nav_stop_all(void)
 
 int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
 {
+    LOG_DBG(LOG_POS_ARGS("target", *pos));
     nav_stop_all();
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;
@@ -253,6 +254,7 @@ int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
 
 int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout)
 {
+    LOG_DBG(LOG_POS_ARGS("target", *pos));
     nav_stop_all();
     k_event_clear(&nav_events, 0xFFFFFFFF);
     target_pos = *pos;

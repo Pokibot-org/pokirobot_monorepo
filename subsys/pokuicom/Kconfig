@@ -19,4 +19,8 @@ config POKUICOM_IMPL_SIMULATED
 
 endchoice
 
+module = POKUICOM
+module-str = pokuicom
+source "subsys/logging/Kconfig.template.log_config"
+
 endif # POKUICOM

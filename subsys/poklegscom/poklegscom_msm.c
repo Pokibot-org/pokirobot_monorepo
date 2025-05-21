@@ -9,7 +9,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(poklegscom);
+LOG_MODULE_REGISTER(poklegscom, CONFIG_POKLEGSCOM_LOG_LEVEL);
 
 #define ROOT_TOPIC "poklegscom/0/"
 

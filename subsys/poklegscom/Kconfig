@@ -19,4 +19,8 @@ config POKLEGSCOM_IMPL_SIMULATED
 
 endchoice
 
+module = POKLEGSCOM
+module-str = poklegscom
+source "subsys/logging/Kconfig.template.log_config"
+
 endif # POKLEGSCOM

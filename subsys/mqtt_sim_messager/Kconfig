@@ -3,7 +3,7 @@ menuconfig MQTT_SIM_MESSAGER
 	select NATIVE_MQTT
 
 if MQTT_SIM_MESSAGER
-module = MQTT_SIM_MESSAGER
+module = MSM
 module-str = msm
 module-help = Tools used for simulation on the host
 source "subsys/logging/Kconfig.template.log_config"

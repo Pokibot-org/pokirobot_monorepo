@@ -1,0 +1,3 @@
+module = NAV
+module-str = nav
+source "subsys/logging/Kconfig.template.log_config"

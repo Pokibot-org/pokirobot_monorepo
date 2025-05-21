@@ -10,7 +10,7 @@
 #include <cmdline.h>
 #include <posix_native_task.h>
 
-LOG_MODULE_REGISTER(msm);
+LOG_MODULE_REGISTER(msm, CONFIG_MSM_LOG_LEVEL);
 
 
 #define ADDRESS     "tcp://127.0.0.1:1883"

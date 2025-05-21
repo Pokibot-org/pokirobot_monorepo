@@ -5,6 +5,8 @@
 #include <pokibot/poktypes.h>
 #include <math.h>
 
+#define LOG_POS_ARGS(msg, pos) msg">pos<x:%0.3f|y:%0.3f|a:%0.3f>", (double)(pos).x, (double)(pos).y, (double)(pos).a
+
 #define RAD_TO_DEG(_rad) ((_rad) * 180.0f / M_PI)
 #define DEG_TO_RAD(_deg) ((_deg) / 180.0f * M_PI)
 

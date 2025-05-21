@@ -15,4 +15,6 @@ config POKISTRAT_CERTIF
     bool "Pokistrat for certification"
 endchoice
 
+rsource "src/nav/Kconfig"
+
 endmenu
