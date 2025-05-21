@@ -88,10 +88,50 @@
             max-angle = <180>;
         };
 
-        servo2 {
+        servo_left_gripper:servo2 {
             status = "okay";
             compatible = "pokibot,pwm-servomotor";
             pwms = <&pwm4 3 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            min-pulse = <PWM_USEC(500)>;
+            max-pulse = <PWM_USEC(2500)>;
+            min-angle = <0>;
+            max-angle = <180>;
+        };
+
+        servo_right_gripper:servo3 {
+            status = "okay";
+            compatible = "pokibot,pwm-servomotor";
+            pwms = <&pwm3 4 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            min-pulse = <PWM_USEC(500)>;
+            max-pulse = <PWM_USEC(2500)>;
+            min-angle = <0>;
+            max-angle = <180>;
+        };
+
+        servo4 {
+            status = "okay";
+            compatible = "pokibot,pwm-servomotor";
+            pwms = <&pwm1 2 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            min-pulse = <PWM_USEC(500)>;
+            max-pulse = <PWM_USEC(2500)>;
+            min-angle = <0>;
+            max-angle = <180>;
+        };
+
+        servo5 {
+            status = "okay";
+            compatible = "pokibot,pwm-servomotor";
+            pwms = <&pwm3 2 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            min-pulse = <PWM_USEC(500)>;
+            max-pulse = <PWM_USEC(2500)>;
+            min-angle = <0>;
+            max-angle = <180>;
+        };
+
+        servo6 {
+            status = "okay";
+            compatible = "pokibot,pwm-servomotor";
+            pwms = <&pwm1 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
             min-pulse = <PWM_USEC(500)>;
             max-pulse = <PWM_USEC(2500)>;
             min-angle = <0>;
@@ -311,6 +351,26 @@ zephyr_camera_dvp: &dcmi {
     };
 };
 
+&timers1 {
+	status = "okay";
+
+	pwm1: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim1_ch2_pa9 &tim1_ch1_pa8>;
+		pinctrl-names = "default";
+	};
+};
+
+&timers3 {
+	status = "okay";
+
+	pwm3: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim3_ch4_pc9 &tim3_ch2_pb5>;
+		pinctrl-names = "default";
+	};
+};
+
 &timers4 {
 	status = "okay";
 
@@ -319,4 +379,93 @@ zephyr_camera_dvp: &dcmi {
 		pinctrl-0 = <&tim4_ch4_pd15 &tim4_ch3_pd14>;
 		pinctrl-names = "default";
 	};
+};
+
+
+&timers2 {
+	status = "okay";
+	st,prescaler = <100>;
+
+	counter_stepper0: counter {
+		status = "okay";
+	};
+};
+
+&uart7 {
+	dmas = <&dmamux1 8 123 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+		<&dmamux1 0 122 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&uart7_tx_pe8 &uart7_rx_pe7>;
+	pinctrl-names = "default";
+	current-speed = <460800>;
+	status = "okay";
+
+	uart_bus {
+		compatible = "zephyr,uart-bus";
+		status = "okay";
+
+		stepper_arm:stepper0 {
+			compatible = "adi,tmc2209-pokibot";
+			status = "okay";
+			counter = <&counter_stepper0>;
+			dir-gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+			step-gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;
+
+			address = <0>;
+			micro-step-res = <256>;
+			ihold = <8>;
+			irun = <8>;
+			iholddelay = <10>;
+		};
+	};
+};
+
+&timers5 {
+	status = "disabled";
+	st,prescaler = <100>;
+
+	counter_stepper1: counter {
+		status = "disabled";
+	};
+};
+
+&usart3 {
+	dmas = <&dmamux1 9 42 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+		<&dmamux1 1 41 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
+	pinctrl-names = "default";
+	current-speed = <460800>;
+	status = "disabled";
+
+	uart_bus {
+		compatible = "zephyr,uart-bus";
+		status = "disabled";
+
+		stepper1 {
+			compatible = "adi,tmc2209-pokibot";
+			status = "disabled";
+			counter = <&counter_stepper1>;
+			dir-gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+			step-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+
+			address = <0>;
+			micro-step-res = <256>;
+			ihold = <8>;
+			irun = <8>;
+			iholddelay = <10>;
+		};
+	};
+};
+
+&dma1 {
+    status = "okay";
+};
+
+&dma2 {
+    status = "okay";
+};
+
+&dmamux1 {
+    status = "okay";
 };
