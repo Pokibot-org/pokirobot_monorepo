@@ -20,4 +20,14 @@ aliases {
         status = "okay";
         compatible = "pokibot,empty-servomotor";
     };
+
+    servo_left_gripper: servo_left_gripper {
+        status = "okay";
+        compatible = "pokibot,empty-servomotor";
+    };
+
+    servo_right_gripper: servo_right_gripper {
+        status = "okay";
+        compatible = "pokibot,empty-servomotor";
+    };
 };
