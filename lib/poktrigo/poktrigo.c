@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <math.h>
-#include "poktrigo.h"
+#include <pokibot/lib/poktrigo.h>
 
 static const float _poki_const_pi = 3.141592653589793f;
 static const float _poki_const_2_pi = (2.0f / _poki_const_pi);
@@ -73,7 +73,7 @@ __attribute__((flatten))
 		float xcos = fabsf(x - xo + 1.0f);
 		//change slope between 1 and -1 when integer part changes 
 		if (xi & 0x02){
-			xsin = xsin - 1.0;
+			xsin = xsin - 1.0f;
 			xcos = xcos - 1.0f;
 		}
 		else {
