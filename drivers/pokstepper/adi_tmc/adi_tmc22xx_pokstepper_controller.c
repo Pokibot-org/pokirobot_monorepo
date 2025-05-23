@@ -295,6 +295,10 @@ static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos
 
     data->target_pos = target_pos;
     int32_t steps = target_pos - data->pos;
+    if (!steps) {
+        return STEPPER_OK;
+    }
+
     bool direction = steps >= 0;
     data->pos_increment = direction ? +1 : -1;
     data->mstep_pos_in_fullstep = 0;
