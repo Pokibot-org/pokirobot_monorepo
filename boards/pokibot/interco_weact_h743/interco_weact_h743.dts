@@ -429,6 +429,15 @@ zephyr_camera_dvp: &dcmi {
 	};
 };
 
+rf_module: &usart3 {
+	pinctrl-0 = <&usart3_tx_pc10 &usart3_rx_pc11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+
+/*
 &usart3 {
 	dmas = <&dmamux1 9 42 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
 		<&dmamux1 1 41 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
@@ -457,6 +466,7 @@ zephyr_camera_dvp: &dcmi {
 		};
 	};
 };
+*/
 
 &dma1 {
     status = "okay";
