@@ -4,6 +4,7 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
 #include "nav/nav.h"
+#include "pomicontrol/pomicontrol.h"
 #include "pokdefs.h"
 
 LOG_MODULE_REGISTER(main);
@@ -167,6 +168,9 @@ struct nav_obstacle static_obstacles[] = {
     },
 };
 
+void pomi_activate_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(pomi_activate_work, pomi_activate_work_handler);
+
 // DEFINE EVERYTHING FOR BLUE
 
 const pos2_t start_pos = {
@@ -197,6 +201,12 @@ struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
         pos.a -= 2 * M_PI;
     }
     return pos;
+}
+
+void pomi_activate_work_handler(struct k_work *work)
+{
+    LOG_INF("Activating pomis");
+    pomicontrol_activate();
 }
 
 #if CONFIG_POKISTRAT_MAIN
@@ -308,6 +318,8 @@ int main(void)
     }
 
     LOG_INF("Match started");
+    k_work_schedule(&pomi_activate_work, K_SECONDS(85));
+
     match(color);
     return 0;
 }
