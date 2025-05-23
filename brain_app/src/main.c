@@ -1,3 +1,4 @@
+#include "pokarm/pokarm.h"
 #include "pokibot/lib/poktocol.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -13,15 +14,17 @@ enum team_color {
     TEAM_COLOR_YELLOW,
 };
 
-#define STRAT_GRADIN_SCORE_LV1              4
-#define STRAT_GRADIN_SCORE_LV2              8
-#define STRAT_GRADIN_SCORE_LV3              16
+#define STRAT_STAND_SCORE_LV1               4
+#define STRAT_STAND_SCORE_LV2               8
+#define STRAT_STAND_SCORE_LV3               16
 #define STRAT_BANNER_SCORE                  20
 #define STRAT_SHOWTIME_GROUPIE_SCORE        5
 #define STRAT_SHOWTIME_SINGER_SCORE         5
 #define STRAT_SHOWTIME_SINGER_ZONE_SCORE    10 // Depends on whant we can do
 #define STRAT_SHOWTIME_EVERYONE_PARTY_SCORE 10
 #define STRAT_END_GAME_IN_BACKSTAGE_SCORE   10
+
+#define STAND_DROP_DISTANCE_FROM_BORDER     0.075f
 
 struct nav_obstacle static_obstacles[] = {
     // RAMPE
@@ -234,20 +237,35 @@ int match(enum pokprotocol_team color) {
     nav_set_pos(&start_pos);
     nav_set_break(false);
 
-    pos2_t waypoints[] = {
-        {.x = start_pos.x, .y = 0.6f, .a = 0},
-        {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = M_PI},
-        {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = M_PI},
+    const pos2_t wp1 = {.x = start_pos.x, .y = 0.6f, .a = 0};
+    const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
+    const pos2_t wp3 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
+    const pos2_t wp4 = {.x = BOARD_MIN_X + 2.225f, .y = STAND_DROP_DISTANCE_FROM_BORDER + ROBOT_CENTER_TO_GRIPPER_DIST, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
+
+    const pos2_t end_pos = {
+        .x = BOARD_MIN_X + 2.655f,
+        .y = 1.775f,
+        .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET
     };
 
-    LOG_INF("Leaving start zone");
+        LOG_INF("Leaving start zone");
     uint32_t nav_events;
-    nav_go_to_direct(&waypoints[0], K_FOREVER);
+    nav_go_to_direct(&wp1, K_FOREVER);
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
-    nav_go_to_direct(&waypoints[1], K_FOREVER);
+    nav_go_to_direct(&wp2, K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(&waypoints[2], K_FOREVER);
+    nav_go_to_direct(&wp3, K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    pokarm_deploy(true);
+
+    nav_go_to_direct(&wp4, K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(&wp3, K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    nav_go_to(&end_pos, K_FOREVER);
     nav_wait_events(&nav_events);
 
     k_sleep(K_FOREVER);
@@ -263,7 +281,19 @@ int main(void)
         nav_register_obstacle(&static_obstacles[i]);
     }
 
-    LOG_INF("Regiter static obstacles OK");
+    LOG_INF("Regiter static obstacles: OK");
+
+    // Wait for the starting cord to be put in to init few things
+    while (pokuicom_get_match_status() != POKUICOM_MATCH_STATUS_SETUP) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STATUS);
+        k_sleep(K_MSEC(10));
+    }
+
+    pokarm_pinch(false);
+    pokarm_deploy(false);
+    pokarm_reset_pos();
+
+    LOG_INF("Init of all the actuatos: OK");
 
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {
@@ -272,8 +302,8 @@ int main(void)
     }
     LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
 
-    while (!pokuicom_is_match_started()) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STARTED);
+    while (pokuicom_get_match_status() != POKUICOM_MATCH_STATUS_STARTED) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STATUS);
         k_sleep(K_MSEC(10));
     }
 
