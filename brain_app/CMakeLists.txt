@@ -9,12 +9,13 @@ target_sources(app PRIVATE
     src/main.c
     src/nav/nav.c
     src/pokarm/pokarm.c
+    src/pakicontrol/pakicontrol.c
     src/astar-jps/IndexPriorityQueue.c
     src/astar-jps/AStar.c
 )
 
 if (CONFIG_MQTT_SIM_MESSENGER)
-target_sources(app PRIVATE
+    target_sources(app PRIVATE
     src/const_publisher.c
 )
 endif()
