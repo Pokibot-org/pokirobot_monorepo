@@ -10,7 +10,7 @@
 
 LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
-bool match_started = false;
+enum pokuicom_match_status match_status = POKUICOM_MATCH_STATUS_UNKNOWN;
 bool has_color_info = false;
 enum pokprotocol_team received_color;
 
@@ -33,9 +33,9 @@ void pokuicom_send_score(uint8_t score)
     return;
 }
 
-bool pokuicom_is_match_started(void)
+enum pokuicom_match_status pokuicom_get_match_status(void)
 {
-    return match_started;
+    return match_status;
 }
 
 int pokuicom_get_team_color(enum pokprotocol_team *color)
@@ -53,7 +53,8 @@ void team_clbk(char *data, int len, void *user_data) {
 }
 
 void match_clbk(char *data, int len, void *user_data) {
-    match_started = true;
+    sscanf(data, "%d", (int*)&match_status);
+    LOG_INF("match_status %d", match_status);
 }
 
 int pokuicom_init(void)

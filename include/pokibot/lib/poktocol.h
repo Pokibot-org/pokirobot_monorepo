@@ -11,14 +11,21 @@ enum poktocol_commands_types {
 };
 
 enum poktocol_data_types {
-    POKTOCOL_DATA_TYPE_UI_SCORE,
+    POKTOCOL_DATA_TYPE_UI_SCORE = 0,
     POKTOCOL_DATA_TYPE_UI_TEAM,
-    POKTOCOL_DATA_TYPE_UI_MATCH_STARTED,
-    POKTOCOL_DATA_TYPE_LEGS_POS,
+    POKTOCOL_DATA_TYPE_UI_MATCH_STATUS,
+
+    POKTOCOL_DATA_TYPE_LEGS_POS = 128,
     POKTOCOL_DATA_TYPE_LEGS_DIR,
     POKTOCOL_DATA_TYPE_LEGS_BREAK,
     POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS,
     POKTOCOL_DATA_TYPE_LEGS_NAV_DATA,
+};
+
+enum pokprotocol_match_status {
+    POKTOCOL_MATCH_STATUS_UNKNOWN,
+    POKTOCOL_MATCH_STATUS_SETUP,
+    POKTOCOL_MATCH_STATUS_STARTED,
 };
 
 enum pokprotocol_team {
@@ -35,6 +42,7 @@ union poktocol_msg_data
 {
     uint8_t score;
     enum pokprotocol_team team;
+    enum pokprotocol_match_status match_status;
     pos2_t legs_pos;
     float legs_dir;
     bool legs_break;

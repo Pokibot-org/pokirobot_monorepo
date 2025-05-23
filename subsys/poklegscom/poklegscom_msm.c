@@ -25,6 +25,8 @@ int poklegscom_set_pos(const pos2_t *pos)
     static char topic_buff[128];
     format_pos(topic_buff, sizeof(topic_buff), pos);
     int ret = msm_send( ROOT_TOPIC "set_pos", topic_buff);
+    current_pos = *pos;
+    k_sleep(K_MSEC(50));
     return ret;
 }
 

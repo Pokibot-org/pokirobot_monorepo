@@ -119,6 +119,7 @@ class Robot:
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
         self.wps: list[NDArray] = []
+        self.tirette = 1 # IN
 
 @dataclass
 class World:
@@ -190,7 +191,9 @@ class PokuicomSim(SimPart):
                     case 1:
                         parent.send("team", f"{self.robot.team}")
                     case 2:
-                        parent.send("match", f"{1}")
+                        parent.send("match", f"{self.robot.tirette}")
+                        if self.robot.tirette != 2:
+                            self.robot.tirette = 2
             case "score":
                 logger.info(f"New score: {payload["value"]}")
 

@@ -10,7 +10,7 @@ LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_pokuicom));
 
-bool match_started = false;
+enum pokuicom_match_status match_status = POKUICOM_MATCH_STATUS_UNKNOWN;
 bool has_color_info = false;
 enum pokprotocol_team received_color;
 
@@ -25,8 +25,8 @@ static void pokuicom_receive(struct poktocol_msg *msg)
             has_color_info = true;
             received_color = msg->data.team;
             break;
-        case POKTOCOL_DATA_TYPE_UI_MATCH_STARTED:
-            match_started = true;
+        case POKTOCOL_DATA_TYPE_UI_MATCH_STATUS:
+            match_status = (enum pokuicom_match_status)msg->data.match_status;
             break;
         default:
             break;
@@ -60,9 +60,9 @@ void pokuicom_send_score(uint8_t score)
     pokuicom_send(&msg);
 }
 
-bool pokuicom_is_match_started(void)
+enum pokuicom_match_status pokuicom_get_match_status(void)
 {
-    return match_started;
+    return match_status;
 }
 
 int pokuicom_get_team_color(enum pokprotocol_team *color)

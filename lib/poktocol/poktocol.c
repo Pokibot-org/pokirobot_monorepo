@@ -57,8 +57,8 @@ int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buff
         case POKTOCOL_DATA_TYPE_UI_TEAM:
             buffer[index++] = msg->data.team;
             break;
-        case POKTOCOL_DATA_TYPE_UI_MATCH_STARTED:
-            // No additional data for this type
+        case POKTOCOL_DATA_TYPE_UI_MATCH_STATUS:
+            buffer[index++] = msg->data.match_status;
             break;
         case POKTOCOL_DATA_TYPE_LEGS_POS: {
             int ret =
@@ -147,8 +147,11 @@ int poktocol_decode_data(const uint8_t *buffer, size_t buffer_size, union poktoc
             }
             data->team = (enum pokprotocol_team)buffer[index++];
             break;
-        case POKTOCOL_DATA_TYPE_UI_MATCH_STARTED:
-            // No additional data for this type
+        case POKTOCOL_DATA_TYPE_UI_MATCH_STATUS:
+            if (buffer_size < 3) {
+                return -1; // Not enough data for team
+            }
+            data->match_status = (enum pokprotocol_match_status)buffer[index++];
             break;
         case POKTOCOL_DATA_TYPE_LEGS_POS:
             pokprotocol_decode_pos(&buffer[index++], &data->legs_pos);
