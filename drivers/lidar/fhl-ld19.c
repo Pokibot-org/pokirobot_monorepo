@@ -121,7 +121,7 @@ static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *m
         diff_deg += 360.0f;
     }
     const int nb_measure_points = 12;
-    float step_deg = diff_deg / ((float)nb_measure_points);
+    float step_deg = diff_deg / ((float)(nb_measure_points - 1));
 
     for (int i = 0; i < nb_measure_points; i++) {
         struct lidar_point current_point = {
