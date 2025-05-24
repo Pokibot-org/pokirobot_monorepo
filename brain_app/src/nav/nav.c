@@ -402,6 +402,11 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     bool obstacle_detected = false;
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
+
+        if (point->distance < (ROBOT_CENTER_POLE_RADIUS + 1.0f)) {
+            continue;
+        }
+
         float point_dir_robot_ref = angle_normalize(point->angle);
         float point_dir_table_ref = angle_normalize(point_dir_robot_ref + robot_pos.a);
         float angle_dist_point_to_robot_dir =

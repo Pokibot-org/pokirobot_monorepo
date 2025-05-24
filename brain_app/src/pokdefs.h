@@ -13,6 +13,7 @@
 
 #define ROBOT_RADIUS                 0.166f
 #define ROBOT_CENTER_TO_GRIPPER_DIST 0.21f
+#define ROBOT_CENTER_POLE_RADIUS     0.049f
 
 #define ROBOT_BATTERY_OFFSET         (-M_PI / 2.0f)
 #define ROBOT_ARM_ANGLE_OFFSET       (ROBOT_BATTERY_OFFSET + 2.0f * M_PI / 3.0f)
