@@ -4,16 +4,11 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
 #include "nav/nav.h"
+#include "pokibot/poktypes.h"
 #include "pomicontrol/pomicontrol.h"
 #include "pokdefs.h"
 
 LOG_MODULE_REGISTER(main);
-
-enum team_color {
-    TEAM_COLOR_NONE,
-    TEAM_COLOR_BLUE,
-    TEAM_COLOR_YELLOW,
-};
 
 #define STRAT_STAND_SCORE_LV1               4
 #define STRAT_STAND_SCORE_LV2               8
@@ -179,9 +174,9 @@ const pos2_t start_pos = {
     .a = 0.0f
 };
 
-struct point2 convert_point_for_team(enum team_color color, struct point2 point)
+struct point2 convert_point_for_team(enum pokprotocol_team color, struct point2 point)
 {
-    if (color == TEAM_COLOR_BLUE) {
+    if (color == POKTOCOL_TEAM_BLUE) {
         return point;
     }
 
@@ -189,9 +184,9 @@ struct point2 convert_point_for_team(enum team_color color, struct point2 point)
     return point;
 }
 
-struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
+struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos)
 {
-    if (color == TEAM_COLOR_BLUE) {
+    if (color == POKTOCOL_TEAM_BLUE) {
         return pos;
     }
 
@@ -203,6 +198,25 @@ struct pos2 convert_pos_for_team(enum team_color color, struct pos2 pos)
     return pos;
 }
 
+int strat_set_break(bool status) {
+    return nav_set_break(status);
+}
+
+int strat_set_pos(enum pokprotocol_team color, const pos2_t *pos) {
+    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    return nav_set_pos(&converted_pos);
+}
+
+int strat_go_to(enum pokprotocol_team color, const pos2_t *pos, k_timeout_t timeout) {
+    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    return nav_go_to(&converted_pos, timeout);
+}
+
+int strat_go_to_direct(enum pokprotocol_team color, const pos2_t *pos, k_timeout_t timeout){
+    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    return nav_go_to_direct(&converted_pos, timeout);
+}
+
 void pomi_activate_work_handler(struct k_work *work)
 {
     LOG_INF("Activating pomis");
@@ -211,28 +225,6 @@ void pomi_activate_work_handler(struct k_work *work)
 
 #if CONFIG_POKISTRAT_MAIN
 int match(enum pokprotocol_team color) {
-    pos2_t start_pos = {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0.0f};
-    nav_set_pos(&start_pos);
-
-    nav_set_break(false);
-
-    pos2_t waypoints[] = {
-        {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI_2},
-        {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 1.5f, .a = M_PI},
-        {.x = BOARD_MIN_X + 2.5f, .y = BOARD_MIN_Y + 0.5f, .a = 3 * M_PI / 2},
-        {.x = BOARD_MIN_X + 0.5f, .y = BOARD_MIN_Y + 0.5f, .a = 0},
-    };
-
-    uint32_t nav_events;
-    nav_go_to(&waypoints[0], K_SECONDS(5));
-    nav_wait_events(&nav_events);
-    nav_go_to(&waypoints[1], K_FOREVER);
-    nav_wait_events(&nav_events);
-    nav_go_to(&waypoints[2], K_FOREVER);
-    nav_wait_events(&nav_events);
-    nav_go_to(&waypoints[3], K_FOREVER);
-    nav_wait_events(&nav_events);
-
     k_sleep(K_FOREVER);
     return 0;
 }
@@ -244,8 +236,8 @@ int match(enum pokprotocol_team color) {
         .y = 0.225f,
         .a = 0.0f
     };
-    nav_set_pos(&start_pos);
-    nav_set_break(false);
+    strat_set_pos(color, &start_pos);
+    strat_set_break(false);
 
     const pos2_t wp1 = {.x = start_pos.x, .y = 0.6f, .a = 0};
     const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
@@ -258,24 +250,24 @@ int match(enum pokprotocol_team color) {
         .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET
     };
 
-        LOG_INF("Leaving start zone");
+    LOG_INF("Leaving start zone");
     uint32_t nav_events;
-    nav_go_to_direct(&wp1, K_FOREVER);
+    strat_go_to_direct(color, &wp1, K_FOREVER);
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
-    nav_go_to_direct(&wp2, K_FOREVER);
+    strat_go_to_direct(color, &wp2, K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(&wp3, K_FOREVER);
+    strat_go_to_direct(color, &wp3, K_FOREVER);
     nav_wait_events(&nav_events);
 
     pokarm_deploy(true);
 
-    nav_go_to_direct(&wp4, K_FOREVER);
+    strat_go_to_direct(color, &wp4, K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(&wp3, K_FOREVER);
+    strat_go_to_direct(color, &wp3, K_FOREVER);
     nav_wait_events(&nav_events);
 
-    nav_go_to(&end_pos, K_FOREVER);
+    strat_go_to(color, &end_pos, K_FOREVER);
     nav_wait_events(&nav_events);
 
     k_sleep(K_FOREVER);
