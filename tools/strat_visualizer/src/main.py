@@ -112,7 +112,7 @@ class RobotObstacle(Obstacle):
 
 
 class Robot:
-    def __init__(self, radius=0.19, team=0) -> None:
+    def __init__(self, radius=0.166, team=0) -> None:
         self.radius = radius
         self.pos = np.array([0.0, 1.0, 0.0])
         self.dir = 0.0
@@ -458,7 +458,8 @@ class PokibotGameSimulator:
         super().__init__()
 
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
-        self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
+        self.world = World()
+        # self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
         self.visualizer = PokibotGameVisualizer(self.world)
 

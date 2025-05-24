@@ -11,7 +11,7 @@
 #define BOARD_SIZE_Y   (BOARD_MAX_Y - BOARD_MIN_Y)
 #define BOARD_CENTER_Y ((BOARD_MIN_Y + BOARD_MAX_Y) / 2.0f)
 
-#define ROBOT_RADIUS                 0.19f
+#define ROBOT_RADIUS                 0.166f
 #define ROBOT_CENTER_TO_GRIPPER_DIST 0.21f
 
 #define ROBOT_BATTERY_OFFSET         (-M_PI / 2.0f)
