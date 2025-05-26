@@ -19,9 +19,9 @@ LOG_MODULE_REGISTER(control);
 #define CONTROL_WAIT_TIMEOUT_BRAKE  (-2)
 
 #define CONTROL_PERIOD_MS 2.0f
-#define ROBOT_L           160.404f
+#define ROBOT_L           136.11984206494193f
 #define WHEEL_PERIMETER   358.142f
-#define MM_TO_USTEPS      102657.14f
+#define MM_TO_USTEPS      100644.25490196078f
 
 #define PLANAR_VMAX   400.0f // 700 mm/s
 #define PLANAR_FACTOR (0.06f * PLANAR_VMAX)
@@ -484,7 +484,7 @@ void _test_calibration_distance()
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     obj.start = true;
-    target = (pos2_t){0.0f, 1100.0f, 0.0f * M_PI};
+    target = (pos2_t){0.0f, 3000.0f, 0.0f * M_PI};
     control_set_waypoints(&target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
