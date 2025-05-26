@@ -6,6 +6,7 @@
 #include <pokibot/drivers/uart_bus.h>
 #include <stdlib.h>
 #include "adi_tmc_uart.h"
+#include "zephyr/devicetree.h"
 
 LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 
@@ -81,6 +82,7 @@ struct tmc22xx_pokibot_data {
     uint8_t irun;
     uint8_t ihold;
     uint8_t iholddelay;
+    bool reverse_shaft;
 
     // STEP DIR CONTROL
     int32_t target_pos;
@@ -139,7 +141,8 @@ static int tmc22xx_set_mres(const struct device *dev, uint32_t mres)
 {
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
     int ret = 0;
-    data->gconf = (data->gconf & ~GENMASK(7, 7)) | FIELD_PREP(GENMASK(7, 7), 1);
+    data->gconf = (data->gconf & ~(GENMASK(7, 7) | GENMASK(3, 3))) | FIELD_PREP(GENMASK(7, 7), 1) |
+                  FIELD_PREP(GENMASK(3, 3), data->reverse_shaft ? 1 : 0);
     ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, data->gconf);
     data->chopconf = (data->chopconf & ~GENMASK(27, 24)) | FIELD_PREP(GENMASK(27, 24), mres);
     ret |= tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
@@ -182,8 +185,6 @@ static int tmc22xx_pokstepper_enable(const struct device *dev, bool enable)
 static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
 {
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
-    // Speed is step per sec but the driver takes ustep per s
-    speed = data->resolution * speed;
     if (speed < TMC2209_VACTUAL_MIN || speed > TMC2209_VACTUAL_MAX) {
         return TMC2209_ERR_SPEED_RANGE;
     }
@@ -196,15 +197,12 @@ static bool tmc22xx_can_do_step_dir(const struct device *dev)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
     if (!device_is_ready(config->counter)) {
-        LOG_ERR("Counter not ready");
         return false;
     }
     if (!gpio_is_ready_dt(&config->step_pin)) {
-        LOG_ERR("step_pin not ready");
         return false;
     }
     if (!gpio_is_ready_dt(&config->dir_pin)) {
-        LOG_ERR("dir_pin not ready");
         return false;
     }
     return true;
@@ -284,7 +282,7 @@ static void poll_stallguard_dwork_handler(struct k_work *work)
 #endif
 }
 
-static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos,
+static int move(const struct device *dev, uint32_t speed_msps, int32_t target_pos,
                 uint8_t stall_threshold)
 {
     const struct tmc22xx_pokibot_config *config = (struct tmc22xx_pokibot_config *)dev->config;
@@ -303,7 +301,7 @@ static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos
     data->pos_increment = direction ? +1 : -1;
     data->mstep_pos_in_fullstep = 0;
     gpio_pin_set_dt(&config->dir_pin, direction);
-    uint32_t step_interval_ns = NSEC_PER_SEC / speed_sps / data->resolution;
+    uint32_t step_interval_ns = NSEC_PER_SEC / speed_msps;
     LOG_DBG("step_interval_ns %d", step_interval_ns);
 
     data->counter_top_cfg.ticks = DIV_ROUND_UP(
@@ -329,7 +327,7 @@ static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos
         return err;
     }
     uint32_t events = k_event_wait(&data->move_events, events_to_wait, false,
-                                   K_MSEC(1000 * (abs(steps) + 2) / speed_sps));
+                                   K_MSEC(1000 * (abs(steps) + 2) / speed_msps));
     counter_stop(config->counter);
     if (events & MOVE_EVENT_OK) {
         LOG_DBG("Move ok");
@@ -341,21 +339,21 @@ static int move(const struct device *dev, uint32_t speed_sps, int32_t target_pos
     return -ETIMEDOUT;
 }
 
-static int tmc22xx_pokstepper_move_by(const struct device *dev, uint32_t speed_sps, int32_t steps)
+static int tmc22xx_pokstepper_move_by(const struct device *dev, uint32_t speed_msps, int32_t steps)
 {
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
-    return move(dev, speed_sps, data->pos + steps, 0);
+    return move(dev, speed_msps, data->pos + steps, 0);
 }
 
-static int tmc22xx_pokstepper_move_to(const struct device *dev, uint32_t speed_sps, int32_t steps)
+static int tmc22xx_pokstepper_move_to(const struct device *dev, uint32_t speed_msps, int32_t steps)
 {
-    return move(dev, speed_sps, steps, 0);
+    return move(dev, speed_msps, steps, 0);
 }
 
-static int tmc22xx_pokstepper_go_to_stall(const struct device *dev, uint32_t speed_sps,
+static int tmc22xx_pokstepper_go_to_stall(const struct device *dev, uint32_t speed_msps,
                                           int32_t steps, uint8_t detection_threshold)
 {
-    int ret = move(dev, speed_sps, steps, detection_threshold);
+    int ret = move(dev, speed_msps, steps, detection_threshold);
     if (ret == STEPPER_STALL) {
         return 0;
     } else if (ret == STEPPER_OK) {
@@ -449,6 +447,7 @@ static struct pokstepper_driver_api tmc22xx_pokstepper_api = {
         .irun = DT_INST_PROP(inst, irun),                                                          \
         .ihold = DT_INST_PROP(inst, ihold),                                                        \
         .iholddelay = DT_INST_PROP(inst, iholddelay),                                              \
+        .reverse_shaft = DT_INST_PROP_OR(inst, reverse_shaft, false),                              \
         .gconf = TMC2209_GCONF_DEFAULT,                                                            \
         .chopconf = TMC2209_CHOPCONF_DEFAULT,                                                      \
         .pos = 0,                                                                                  \

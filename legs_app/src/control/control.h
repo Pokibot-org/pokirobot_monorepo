@@ -3,6 +3,7 @@
 #include <zephyr/kernel.h>
 #include <pokibot/lib/pokutils.h>
 
+int control_start(void);
 int control_set_pos(pos2_t pos);
 int control_get_pos(pos2_t *pos);
 int control_get_dir(float *dir);
@@ -15,4 +16,15 @@ int control_task_wait_target(float planar_sensivity, float angular_sensivity,
     control_task_wait_target(CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT,                            \
                              CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT, _timeout_target_ms,       \
                              _timeout_brake_ms)
+
+
+void _test_motor_cmd();
+void _test_target();
+void _test_calibration_distance();
+void _test_calibration_angle();
+void _test_calibration_mix();
+void _test_connerie();
+void _test_drawing();
+
+
 #endif

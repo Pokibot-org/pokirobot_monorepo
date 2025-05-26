@@ -97,6 +97,7 @@
 			ihold = <15>;
 			irun = <31>;
 			iholddelay = <10>;
+			reverse-shaft;
 		};
 
 		stepper1:stepper1 {
@@ -110,6 +111,7 @@
 			ihold = <15>;
 			irun = <31>;
 			iholddelay = <10>;
+			reverse-shaft;
 		};
 		stepper2:stepper2 {
 			compatible = "adi,tmc2209-pokibot";
@@ -122,6 +124,7 @@
 			ihold = <15>;
 			irun = <31>;
 			iholddelay = <10>;
+			reverse-shaft;
 		};
 	};
 };
@@ -143,7 +146,7 @@
 &uart4 {
 	pinctrl-0 = <&uart4_tx_pc10 &uart4_rx_pc11>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <921600>;
 	status = "okay";
 };
 

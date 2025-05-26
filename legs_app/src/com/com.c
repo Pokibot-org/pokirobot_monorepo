@@ -93,9 +93,8 @@ void publish_timer_expiry(struct k_timer *timer)
     k_work_submit(&publish_work);
 }
 
-int com_init(void)
+int com_start(void)
 {
-
     k_work_init(&publish_work, publish_work_handler);
     k_timer_init(&publish_timer, publish_timer_expiry, NULL);
 
@@ -107,5 +106,3 @@ int com_init(void)
     k_timer_start(&publish_timer, K_NO_WAIT, K_MSEC(MSEC_PER_SEC/100));
     return 0;
 }
-
-SYS_INIT(com_init, APPLICATION, 99);

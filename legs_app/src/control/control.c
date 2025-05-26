@@ -9,7 +9,6 @@
 #include <pokibot/lib/pokutils.h>
 #include "control.h"
 
-
 LOG_MODULE_REGISTER(control);
 
 #define CONTROL_MUTEX_TIMEOUT (K_MSEC(30))
@@ -309,7 +308,7 @@ static void control_task(void *arg0, void *arg1, void *arg2)
         }
         // update pos
         control_get_pos_internal(&pos);
-        // control_get_motors_v(&shared_ctrl, &motors_v);
+        // control_get_motors_v(&motors_v);
         // local_vel = local_vel_from_omni(motors_v);
         // world_vel = world_vel_from_local(old_pos, local_vel);
         pos = (pos2_t){
@@ -348,8 +347,7 @@ static void control_task(void *arg0, void *arg1, void *arg2)
             if (idx < n && dist_prev >= 0.0f &&
                 ((wp_dist > dist_prev && wp_dist <= WP_SENSITIVITY) ||
                  wp_dist < CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT)) {
-                obj.waypoints.idx =
-                    MIN(obj.waypoints.idx + 1, obj.waypoints.n);
+                obj.waypoints.idx = MIN(obj.waypoints.idx + 1, obj.waypoints.n);
                 dist_prev = -1.0f;
                 LOG_DBG("idx: %d", obj.waypoints.idx);
             } else {
@@ -376,15 +374,15 @@ static void control_task(void *arg0, void *arg1, void *arg2)
     LOG_INF("control task done");
 }
 
-int control_init(void)
+int control_start(void)
 {
     int ret = 0;
-    if (k_mutex_init(&obj.access_mutex)){
+    if (k_mutex_init(&obj.access_mutex)) {
         LOG_ERR("Mutex init error access mutex");
         return -ENODEV;
     }
 
-    if (k_mutex_init(&obj.waypoints.lock)){
+    if (k_mutex_init(&obj.waypoints.lock)) {
         LOG_ERR("Mutex init error waypoints lock");
         return -ENODEV;
     }
@@ -413,10 +411,346 @@ int control_init(void)
     control_set_waypoints(&target, 1);
     obj.ready = true;
 
-   	k_tid_t thread_id = k_thread_create(&control_thread, control_thread_stack, K_THREAD_STACK_SIZEOF(control_thread_stack),
-										control_task, NULL, NULL, NULL, 2, 0, K_NO_WAIT);
-	k_thread_name_set(thread_id, "control");
+    k_tid_t thread_id = k_thread_create(&control_thread, control_thread_stack,
+                                        K_THREAD_STACK_SIZEOF(control_thread_stack), control_task,
+                                        NULL, NULL, NULL, 2, 0, K_NO_WAIT);
+    k_thread_name_set(thread_id, "control");
     return ret;
 }
 
-SYS_INIT(control_init, APPLICATION, 50);
+void _test_motor_cmd()
+{
+    k_sleep(K_MSEC(1000));
+    while (1) {
+        pokstepper_set_speed(obj.stepper0, 0);
+        pokstepper_set_speed(obj.stepper1, 0);
+        pokstepper_set_speed(obj.stepper2, 0);
+        k_sleep(K_MSEC(1000));
+        pokstepper_set_speed(obj.stepper0, 10000);
+        pokstepper_set_speed(obj.stepper1, 20000);
+        pokstepper_set_speed(obj.stepper2, 40000);
+        k_sleep(K_FOREVER);
+        k_sleep(K_MSEC(1000));
+        pokstepper_set_speed(obj.stepper0, 0);
+        pokstepper_set_speed(obj.stepper1, 0);
+        pokstepper_set_speed(obj.stepper2, 0);
+        k_sleep(K_MSEC(1000));
+        pokstepper_set_speed(obj.stepper0, 10000);
+        pokstepper_set_speed(obj.stepper1, 0);
+        pokstepper_set_speed(obj.stepper2, 0);
+        k_sleep(K_MSEC(1000));
+        pokstepper_set_speed(obj.stepper0, 0);
+        pokstepper_set_speed(obj.stepper1, 10000);
+        pokstepper_set_speed(obj.stepper2, 0);
+        k_sleep(K_MSEC(1000));
+        pokstepper_set_speed(obj.stepper0, 0);
+        pokstepper_set_speed(obj.stepper1, 0);
+        pokstepper_set_speed(obj.stepper2, 10000);
+        k_sleep(K_MSEC(1000));
+    }
+}
+
+void _test_target()
+{
+    LOG_INF("_test_target");
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+    while (1) {
+        if (!obj.ready) {
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        break;
+    }
+    obj.start = true;
+    k_sleep(K_MSEC(5000));
+    pos2_t target;
+    while (1) {
+        target = (pos2_t){100.0f, 100.0f, 1.0f * M_PI};
+        control_set_waypoints(&target, 1);
+        LOG_DBG("1");
+        k_sleep(K_MSEC(5000));
+        target = (pos2_t){0.0f, 0.0f, 0.0f * M_PI};
+        control_set_waypoints(&target, 1);
+        LOG_DBG("2");
+        k_sleep(K_MSEC(5000));
+        target = (pos2_t){100.0f, -100.0f, -2.0f * M_PI};
+        control_set_waypoints(&target, 1);
+        LOG_DBG("3");
+        k_sleep(K_MSEC(5000));
+    }
+}
+
+void _test_calibration_distance()
+{
+    LOG_INF("_test_calibration");
+    // static const struct gpio_dt_spec led =
+    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+    obj.start_init = true;
+    while (1) {
+        if (!obj.ready) {
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        break;
+    }
+    LOG_DBG("alive");
+    // gpio_pin_toggle(led.port, led.pin);
+    pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
+    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(&target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    k_sleep(K_MSEC(1000));
+    obj.start = true;
+    // gpio_pin_toggle(led.port, led.pin);
+    target = (pos2_t){0.0f, 1100.0f, 0.0f * M_PI};
+    control_set_waypoints(&target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    k_sleep(K_MSEC(15000));
+}
+
+void _test_calibration_angle()
+{
+    LOG_INF("_test_calibration");
+    // static const struct gpio_dt_spec led =
+    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+
+    LOG_DBG("alive");
+    // gpio_pin_toggle(led.port, led.pin);
+    pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
+    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(&target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    k_sleep(K_MSEC(1000));
+    obj.start = true;
+    // gpio_pin_toggle(led.port, led.pin);
+    target = (pos2_t){0.0f, 0.0f, 20.0f * M_PI};
+    control_set_waypoints(&target, 1);
+    k_sleep(K_MSEC(15000));
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+}
+
+void _test_calibration_mix()
+{
+    LOG_INF("_test_calibration");
+    // static const struct gpio_dt_spec led =
+    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+    obj.start_init = true;
+    while (1) {
+        if (!obj.ready) {
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        break;
+    }
+    LOG_DBG("alive");
+    // gpio_pin_toggle(led.port, led.pin);
+    pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
+    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(&target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    k_sleep(K_MSEC(1000));
+    obj.start = true;
+    target = (pos2_t){0.0f, 0.0f, 1.0f * M_PI};
+    control_set_waypoints(&target, 1);
+    k_sleep(K_MSEC(5000));
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    target = (pos2_t){0.0f, 1000.0f, -1.0f * M_PI};
+    control_set_waypoints(&target, 1);
+    k_sleep(K_MSEC(5000));
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
+            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+}
+
+void _test_connerie()
+{
+    LOG_INF("_test_connerie");
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+    obj.start_init = true;
+    while (1) {
+        if (!obj.ready) {
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        break;
+    }
+    obj.start = true;
+    LOG_DBG("alive");
+    // gpio_pin_toggle(led.port, led.pin);
+    pos2_t target = (pos2_t){0.0f, 0.0f, 100.0f};
+    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(&target, 1);
+    k_sleep(K_MSEC(15000));
+    obj.brake = true;
+}
+
+void _test_drawing()
+{
+    LOG_INF("_test_drawing");
+#if !(CONFIG_CONTROL_TASK)
+    LOG_ERR("control task not launched");
+#endif
+    obj.start_init = true;
+    while (1) {
+        if (!obj.ready) {
+            k_sleep(K_MSEC(100));
+            continue;
+        }
+        break;
+    }
+    LOG_DBG("alive");
+    // gpio_pin_toggle(led.port, led.pin);
+    pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
+    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(&target, 1);
+    k_sleep(K_MSEC(1000));
+    obj.start = true;
+
+    // start of drawing
+    pos2_t draw_wps[] = {
+        (pos2_t){.x = 46.0f, .y = 202.0f, .a = 0.0f},
+        (pos2_t){.x = 44.0f, .y = 202.0f, .a = 0.0f},
+        (pos2_t){.x = 40.0f, .y = 199.0f, .a = 0.0f},
+        (pos2_t){.x = 36.0f, .y = 195.0f, .a = 0.0f},
+        (pos2_t){.x = 34.0f, .y = 190.0f, .a = 0.0f},
+        (pos2_t){.x = 34.0f, .y = 190.0f, .a = 0.0f},
+        (pos2_t){.x = 34.0f, .y = 168.0f, .a = 0.0f},
+        (pos2_t){.x = 26.0f, .y = 161.0f, .a = 0.0f},
+        (pos2_t){.x = 19.0f, .y = 154.0f, .a = 0.0f},
+        (pos2_t){.x = 13.0f, .y = 146.0f, .a = 0.0f},
+        (pos2_t){.x = 8.0f, .y = 138.0f, .a = 0.0f},
+        (pos2_t){.x = 5.0f, .y = 129.0f, .a = 0.0f},
+        (pos2_t){.x = 2.0f, .y = 119.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y = 109.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y = 98.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y = 98.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y = 98.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y = 89.0f, .a = 0.0f},
+        (pos2_t){.x = 1.0f, .y = 80.0f, .a = 0.0f},
+        (pos2_t){.x = 3.0f, .y = 71.0f, .a = 0.0f},
+        (pos2_t){.x = 6.0f, .y = 61.0f, .a = 0.0f},
+        (pos2_t){.x = 12.0f, .y = 52.0f, .a = 0.0f},
+        (pos2_t){.x = 18.0f, .y = 43.0f, .a = 0.0f},
+        (pos2_t){.x = 27.0f, .y = 34.0f, .a = 0.0f},
+        (pos2_t){.x = 38.0f, .y = 24.0f, .a = 0.0f},
+        (pos2_t){.x = 38.0f, .y = 12.0f, .a = 0.0f},
+        (pos2_t){.x = 38.0f, .y = 12.0f, .a = 0.0f},
+        (pos2_t){.x = 40.0f, .y = 7.0f, .a = 0.0f},
+        (pos2_t){.x = 42.0f, .y = 3.0f, .a = 0.0f},
+        (pos2_t){.x = 47.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 47.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 47.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 51.0f, .y = 1.0f, .a = 0.0f},
+        (pos2_t){.x = 53.0f, .y = 2.0f, .a = 0.0f},
+        (pos2_t){.x = 55.0f, .y = 4.0f, .a = 0.0f},
+        (pos2_t){.x = 56.0f, .y = 6.0f, .a = 0.0f},
+        (pos2_t){.x = 57.0f, .y = 10.0f, .a = 0.0f},
+        (pos2_t){.x = 58.0f, .y = 14.0f, .a = 0.0f},
+        (pos2_t){.x = 63.0f, .y = 12.0f, .a = 0.0f},
+        (pos2_t){.x = 70.0f, .y = 10.0f, .a = 0.0f},
+        (pos2_t){.x = 79.0f, .y = 9.0f, .a = 0.0f},
+        (pos2_t){.x = 88.0f, .y = 9.0f, .a = 0.0f},
+        (pos2_t){.x = 95.0f, .y = 8.0f, .a = 0.0f},
+        (pos2_t){.x = 103.0f, .y = 9.0f, .a = 0.0f},
+        (pos2_t){.x = 110.0f, .y = 11.0f, .a = 0.0f},
+        (pos2_t){.x = 117.0f, .y = 14.0f, .a = 0.0f},
+        (pos2_t){.x = 119.0f, .y = 7.0f, .a = 0.0f},
+        (pos2_t){.x = 121.0f, .y = 3.0f, .a = 0.0f},
+        (pos2_t){.x = 124.0f, .y = 1.0f, .a = 0.0f},
+        (pos2_t){.x = 127.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 127.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 127.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 130.0f, .y = 0.0f, .a = 0.0f},
+        (pos2_t){.x = 132.0f, .y = 1.0f, .a = 0.0f},
+        (pos2_t){.x = 135.0f, .y = 4.0f, .a = 0.0f},
+        (pos2_t){.x = 138.0f, .y = 11.0f, .a = 0.0f},
+        (pos2_t){.x = 138.0f, .y = 11.0f, .a = 0.0f},
+        (pos2_t){.x = 137.0f, .y = 25.0f, .a = 0.0f},
+        (pos2_t){.x = 151.0f, .y = 37.0f, .a = 0.0f},
+        (pos2_t){.x = 157.0f, .y = 44.0f, .a = 0.0f},
+        (pos2_t){.x = 163.0f, .y = 52.0f, .a = 0.0f},
+        (pos2_t){.x = 169.0f, .y = 61.0f, .a = 0.0f},
+        (pos2_t){.x = 173.0f, .y = 72.0f, .a = 0.0f},
+        (pos2_t){.x = 174.0f, .y = 77.0f, .a = 0.0f},
+        (pos2_t){.x = 176.0f, .y = 84.0f, .a = 0.0f},
+        (pos2_t){.x = 176.0f, .y = 90.0f, .a = 0.0f},
+        (pos2_t){.x = 177.0f, .y = 97.0f, .a = 0.0f},
+        (pos2_t){.x = 177.0f, .y = 97.0f, .a = 0.0f},
+        (pos2_t){.x = 177.0f, .y = 97.0f, .a = 0.0f},
+        (pos2_t){.x = 176.0f, .y = 108.0f, .a = 0.0f},
+        (pos2_t){.x = 174.0f, .y = 118.0f, .a = 0.0f},
+        (pos2_t){.x = 171.0f, .y = 128.0f, .a = 0.0f},
+        (pos2_t){.x = 167.0f, .y = 137.0f, .a = 0.0f},
+        (pos2_t){.x = 163.0f, .y = 145.0f, .a = 0.0f},
+        (pos2_t){.x = 157.0f, .y = 153.0f, .a = 0.0f},
+        (pos2_t){.x = 150.0f, .y = 161.0f, .a = 0.0f},
+        (pos2_t){.x = 142.0f, .y = 168.0f, .a = 0.0f},
+        (pos2_t){.x = 142.0f, .y = 189.0f, .a = 0.0f},
+        (pos2_t){.x = 142.0f, .y = 189.0f, .a = 0.0f},
+        (pos2_t){.x = 140.0f, .y = 194.0f, .a = 0.0f},
+        (pos2_t){.x = 138.0f, .y = 199.0f, .a = 0.0f},
+        (pos2_t){.x = 134.0f, .y = 202.0f, .a = 0.0f},
+        (pos2_t){.x = 129.0f, .y = 204.0f, .a = 0.0f},
+        (pos2_t){.x = 129.0f, .y = 204.0f, .a = 0.0f},
+        (pos2_t){.x = 129.0f, .y = 204.0f, .a = 0.0f},
+        (pos2_t){.x = 125.0f, .y = 203.0f, .a = 0.0f},
+        (pos2_t){.x = 122.0f, .y = 202.0f, .a = 0.0f},
+        (pos2_t){.x = 119.0f, .y = 200.0f, .a = 0.0f},
+        (pos2_t){.x = 117.0f, .y = 197.0f, .a = 0.0f},
+        (pos2_t){.x = 116.0f, .y = 194.0f, .a = 0.0f},
+        (pos2_t){.x = 114.0f, .y = 191.0f, .a = 0.0f},
+        (pos2_t){.x = 113.0f, .y = 183.0f, .a = 0.0f},
+        (pos2_t){.x = 107.0f, .y = 184.0f, .a = 0.0f},
+        (pos2_t){.x = 101.0f, .y = 185.0f, .a = 0.0f},
+        (pos2_t){.x = 95.0f, .y = 186.0f, .a = 0.0f},
+        (pos2_t){.x = 89.0f, .y = 186.0f, .a = 0.0f},
+        (pos2_t){.x = 76.0f, .y = 185.0f, .a = 0.0f},
+        (pos2_t){.x = 63.0f, .y = 183.0f, .a = 0.0f},
+        (pos2_t){.x = 62.0f, .y = 189.0f, .a = 0.0f},
+        (pos2_t){.x = 60.0f, .y = 195.0f, .a = 0.0f},
+        (pos2_t){.x = 59.0f, .y = 197.0f, .a = 0.0f},
+        (pos2_t){.x = 57.0f, .y = 200.0f, .a = 0.0f},
+        (pos2_t){.x = 53.0f, .y = 202.0f, .a = 0.0f},
+        (pos2_t){.x = 49.0f, .y = 202.0f, .a = 0.0f},
+    };
+    int draw_wps_len = 104;
+    // end of drawing
+    // scale
+    float scaling = 3.0f;
+    for (int i = 0; i < draw_wps_len; i++) {
+        draw_wps[i].x *= scaling;
+        draw_wps[i].y *= scaling;
+        LOG_DBG("p[%d]: %.2f %.2f %.2f", i, (double)draw_wps[i].x, (double)draw_wps[i].y,
+                (double)draw_wps[i].a);
+    }
+    control_set_waypoints(draw_wps, draw_wps_len);
+    control_task_wait_target_default(100000.0f, 10.0f);
+}
