@@ -21,9 +21,9 @@ void do_square(void) {
 int main(void)
 {
     control_start();
-    // com_start();
+    com_start();
     // _test_motor_cmd();
-    _test_calibration_angle();
+    // _test_calibration_angle();
     // do_square();
     return 0;
 }

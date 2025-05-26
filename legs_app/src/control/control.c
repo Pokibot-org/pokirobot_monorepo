@@ -420,6 +420,7 @@ int control_start(void)
 
 void _test_motor_cmd()
 {
+    control_start();
     k_sleep(K_MSEC(1000));
     while (1) {
         pokstepper_set_speed(obj.stepper0, 0);
@@ -452,18 +453,7 @@ void _test_motor_cmd()
 void _test_target()
 {
     LOG_INF("_test_target");
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-    while (1) {
-        if (!obj.ready) {
-            k_sleep(K_MSEC(100));
-            continue;
-        }
-        break;
-    }
-    obj.start = true;
-    k_sleep(K_MSEC(5000));
+    control_start();
     pos2_t target;
     while (1) {
         target = (pos2_t){100.0f, 100.0f, 1.0f * M_PI};
@@ -484,22 +474,8 @@ void _test_target()
 void _test_calibration_distance()
 {
     LOG_INF("_test_calibration");
-    // static const struct gpio_dt_spec led =
-    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-    obj.start_init = true;
-    while (1) {
-        if (!obj.ready) {
-            k_sleep(K_MSEC(100));
-            continue;
-        }
-        break;
-    }
+    control_start();
     LOG_DBG("alive");
-    // gpio_pin_toggle(led.port, led.pin);
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
@@ -508,7 +484,6 @@ void _test_calibration_distance()
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     obj.start = true;
-    // gpio_pin_toggle(led.port, led.pin);
     target = (pos2_t){0.0f, 1100.0f, 0.0f * M_PI};
     control_set_waypoints(&target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
@@ -520,15 +495,8 @@ void _test_calibration_distance()
 void _test_calibration_angle()
 {
     LOG_INF("_test_calibration");
-    // static const struct gpio_dt_spec led =
-    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-
+    control_start();
     LOG_DBG("alive");
-    // gpio_pin_toggle(led.port, led.pin);
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
@@ -537,7 +505,6 @@ void _test_calibration_angle()
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     obj.start = true;
-    // gpio_pin_toggle(led.port, led.pin);
     target = (pos2_t){0.0f, 0.0f, 20.0f * M_PI};
     control_set_waypoints(&target, 1);
     k_sleep(K_MSEC(15000));
@@ -549,22 +516,8 @@ void _test_calibration_angle()
 void _test_calibration_mix()
 {
     LOG_INF("_test_calibration");
-    // static const struct gpio_dt_spec led =
-    //     GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-    // int ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-    obj.start_init = true;
-    while (1) {
-        if (!obj.ready) {
-            k_sleep(K_MSEC(100));
-            continue;
-        }
-        break;
-    }
+    control_start();
     LOG_DBG("alive");
-    // gpio_pin_toggle(led.port, led.pin);
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
@@ -590,20 +543,8 @@ void _test_calibration_mix()
 void _test_connerie()
 {
     LOG_INF("_test_connerie");
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-    obj.start_init = true;
-    while (1) {
-        if (!obj.ready) {
-            k_sleep(K_MSEC(100));
-            continue;
-        }
-        break;
-    }
-    obj.start = true;
+    control_start();
     LOG_DBG("alive");
-    // gpio_pin_toggle(led.port, led.pin);
     pos2_t target = (pos2_t){0.0f, 0.0f, 100.0f};
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
@@ -614,19 +555,8 @@ void _test_connerie()
 void _test_drawing()
 {
     LOG_INF("_test_drawing");
-#if !(CONFIG_CONTROL_TASK)
-    LOG_ERR("control task not launched");
-#endif
-    obj.start_init = true;
-    while (1) {
-        if (!obj.ready) {
-            k_sleep(K_MSEC(100));
-            continue;
-        }
-        break;
-    }
+    control_start();
     LOG_DBG("alive");
-    // gpio_pin_toggle(led.port, led.pin);
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
