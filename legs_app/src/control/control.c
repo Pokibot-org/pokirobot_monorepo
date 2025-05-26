@@ -429,7 +429,6 @@ void _test_motor_cmd()
         pokstepper_set_speed(obj.stepper0, 10000);
         pokstepper_set_speed(obj.stepper1, 20000);
         pokstepper_set_speed(obj.stepper2, 40000);
-        k_sleep(K_FOREVER);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj.stepper0, 0);
         pokstepper_set_speed(obj.stepper1, 0);
