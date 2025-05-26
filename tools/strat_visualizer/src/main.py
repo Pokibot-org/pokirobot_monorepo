@@ -195,7 +195,7 @@ class PokuicomSim(SimPart):
                         if self.robot.tirette != 2:
                             self.robot.tirette = 2
             case "score":
-                logger.info(f"New score: {payload["value"]}")
+                logger.info(f'New score: {payload["value"]}')
 
 class PoklegscomSim(SimPart):
     def __init__(self, msm: MqttSimMessengerNode, robot: Robot) -> None:
