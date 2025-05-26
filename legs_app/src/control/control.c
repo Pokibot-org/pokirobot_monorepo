@@ -56,8 +56,6 @@ typedef struct omni3 {
 } omni3_t;
 
 struct control {
-    bool start;
-    bool start_init;
     bool brake;
     bool ready;
     bool at_target;
@@ -400,7 +398,6 @@ int control_start(void)
         return -ENODEV;
     }
 
-    obj.start = false;
     obj.brake = false;
     obj.at_target = false;
     obj.planar_target_sensivity = CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT;
@@ -483,7 +480,6 @@ void _test_calibration_distance()
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
-    obj.start = true;
     target = (pos2_t){0.0f, 3000.0f, 0.0f * M_PI};
     control_set_waypoints(&target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
@@ -504,7 +500,6 @@ void _test_calibration_angle()
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
-    obj.start = true;
     target = (pos2_t){0.0f, 0.0f, 20.0f * M_PI};
     control_set_waypoints(&target, 1);
     k_sleep(K_MSEC(15000));
@@ -525,7 +520,6 @@ void _test_calibration_mix()
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
             (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
-    obj.start = true;
     target = (pos2_t){0.0f, 0.0f, 1.0f * M_PI};
     control_set_waypoints(&target, 1);
     k_sleep(K_MSEC(5000));
@@ -561,7 +555,6 @@ void _test_drawing()
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     control_set_waypoints(&target, 1);
     k_sleep(K_MSEC(1000));
-    obj.start = true;
 
     // start of drawing
     pos2_t draw_wps[] = {

@@ -8,6 +8,9 @@ help: # show help for each of the Makefile recipes.
 build: # build target
 	west build -b pokimotor . --build-dir ../build
 
+build-debug: # build debug target
+	west build -b pokimotor . --build-dir ../build  -- -DOVERLAY_CONFIG="debug.conf"
+
 rebuild: # rebuild target
 	west build -b pokimotor . --pristine --build-dir ../build
 
