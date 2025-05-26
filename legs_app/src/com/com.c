@@ -32,6 +32,8 @@ void publish_work_handler(struct k_work *work)
     };
     control_get_pos(&msg.data.legs_nav_data.pos);
     control_get_dir(&msg.data.legs_nav_data.dir);
+    msg.data.legs_nav_data.pos.x *= 0.001f;
+    msg.data.legs_nav_data.pos.y *= 0.001f;
     encode_and_send(&msg);
 }
 
@@ -56,6 +58,8 @@ static void com_rx_payload(uint8_t *payload_data, size_t payload_size) {
                     LOG_ERR("Err decoding pos");
                     return;
                 }
+                data.legs_pos.x *= 1000;
+                data.legs_pos.y *= 1000;
                 control_set_pos(data.legs_pos);
             }
             break;
@@ -67,6 +71,10 @@ static void com_rx_payload(uint8_t *payload_data, size_t payload_size) {
                 if (poktocol_decode_data(payload_data, payload_size, &data)) {
                     LOG_ERR("Err decoding wps");
                     return;
+                }
+                for (int i = 0; i < data.waypoints.nb_wps; i++) {
+                    data.waypoints.wps[i].x *= 1000;
+                    data.waypoints.wps[i].y *= 1000;
                 }
                 control_set_waypoints(data.waypoints.wps, data.waypoints.nb_wps);
             }
