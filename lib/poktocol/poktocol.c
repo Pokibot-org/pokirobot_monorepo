@@ -49,6 +49,10 @@ int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buff
     buffer[index++] = msg->header.cmd;
     buffer[index++] = msg->header.type;
 
+    if (msg->header.cmd != POKTOCOL_CMD_TYPE_WRITE) {
+        return index;
+    }
+
     // Encode the data based on the type
     switch (msg->header.type) {
         case POKTOCOL_DATA_TYPE_UI_SCORE:
