@@ -315,7 +315,7 @@ zephyr_camera_dvp: &dcmi {
     status = "okay";
     pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
     pinctrl-names = "default";
-    current-speed = <921600>;
+    current-speed = <115200>;
     pokmac_ui: pokmac_ui {
         compatible = "pokibot,pokmac";
         status = "okay";
@@ -344,7 +344,7 @@ zephyr_camera_dvp: &dcmi {
     status = "okay";
     pinctrl-0 = <&uart4_tx_pa12 &uart4_rx_pa11>;
     pinctrl-names = "default";
-    current-speed = <921600>;
+    current-speed = <115200>;
     pokmac_legs: pokmac_legs {
         compatible = "pokibot,pokmac";
         status = "okay";
