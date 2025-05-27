@@ -389,8 +389,29 @@ static bool is_obstacled_too_close(float angle, float distance)
     return angle < test_angle / 2;
 }
 
+void log_lidar_point(const struct lidar_point *point)
+{
+    const int decimation = 4;
+    static int decimation_counter = 0;
+    decimation_counter = (decimation_counter + 1) % decimation;
+    if (!decimation_counter) {
+        LOG_RAW(">%0.3f;%0.3f", (double)point->angle, (double)point->distance);
+    }
+}
+
+void log_lidar_lp_points(const struct lidar_point *points, size_t nb_points) {
+
+    LOG_RAW("LP|");
+    for (size_t i = 0; i < nb_points; i++) {
+        const struct lidar_point *point = &points[i];
+        log_lidar_point(point);
+    }
+    LOG_RAW("\n");
+}
+
 void lidar_callback(const struct lidar_point *points, size_t nb_points, void *user_data)
 {
+    // log_lidar_lp_points(points, nb_points);
     float robot_dir;
     pos2_t robot_pos;
     poklegscom_get_dir(&robot_dir);
@@ -400,12 +421,19 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     char *grid = astar_grids[current_astar_grid];
     memcpy(grid, static_astar_grid, sizeof(static_astar_grid));
     bool obstacle_detected = false;
+    // LOG_RAW("LP|");
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
 
-        if (point->distance < (ROBOT_CENTER_POLE_RADIUS + 1.0f)) {
+        if (point->distance < (ROBOT_CENTER_POLE_RADIUS + 0.04f)) {
             continue;
         }
+
+        if (point->intensity < 50) {
+            continue;
+        }
+
+        // log_lidar_point(point);
 
         float point_dir_robot_ref = angle_normalize(point->angle);
         float point_dir_table_ref = angle_normalize(point_dir_robot_ref + robot_pos.a);
@@ -437,7 +465,9 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
         }
 
         add_lidar_point_obstacle_to_grid(grid, lidar_point2);
+        // LOG_RAW(">%0.3f;%0.3f", (double)point->angle, (double)point->distance);
     }
+    // LOG_RAW("\n");
     current_astar_grid = next_astar_grid;
     update_obstacle_detection_state(obstacle_detected);
 }
