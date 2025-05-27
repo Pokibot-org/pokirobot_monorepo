@@ -111,10 +111,31 @@ static int tmc22xx_rrequest(const struct device *dev, uint8_t reg, uint32_t *dat
     return tmc_reg_read(config->uart_bus_dev, config->address, reg, data);
 }
 
+static int tmc22xx_get_ifcnt(const struct device *dev, uint32_t *ifcnt)
+{
+    return tmc22xx_rrequest(dev, TMC2209_REG_IFCNT, ifcnt);
+}
+
+static int tmc22xx_wrequest_confirmed(const struct device *dev, uint8_t reg, uint32_t data)
+{
+    const int nb_retry = 5;
+    uint32_t ifcnt_before, ifcnt_after;
+    for (int i = 0; i < nb_retry; i++) {
+        tmc22xx_get_ifcnt(dev, &ifcnt_before);
+        tmc22xx_wrequest(dev, reg, data);
+        tmc22xx_get_ifcnt(dev, &ifcnt_after);
+        if ((ifcnt_before + 1) == ifcnt_after) {
+            return 0;
+        }
+    }
+    LOG_ERR("Write confirmed error");
+    return -1;
+}
+
 static int tmc22xx_set_senddelay(const struct device *dev, uint32_t senddelay)
 {
     uint32_t data = FIELD_PREP(GENMASK(11, 8), senddelay);
-    return tmc22xx_wrequest(dev, TMC2209_REG_SLAVECONF, data);
+    return tmc22xx_wrequest_confirmed(dev, TMC2209_REG_SLAVECONF, data);
 }
 
 static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint32_t irun,
@@ -123,7 +144,7 @@ static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint
     int ret = 0;
     uint32_t data = FIELD_PREP(GENMASK(4, 0), ihold) | FIELD_PREP(GENMASK(12, 8), irun) |
                     FIELD_PREP(GENMASK(19, 16), iholddelay);
-    ret = tmc22xx_wrequest(dev, TMC2209_REG_IHOLD_IRUN, data);
+    ret = tmc22xx_wrequest_confirmed(dev, TMC2209_REG_IHOLD_IRUN, data);
     return ret;
 }
 
@@ -143,9 +164,9 @@ static int tmc22xx_set_mres(const struct device *dev, uint32_t mres)
     int ret = 0;
     data->gconf = (data->gconf & ~(GENMASK(7, 7) | GENMASK(3, 3))) | FIELD_PREP(GENMASK(7, 7), 1) |
                   FIELD_PREP(GENMASK(3, 3), data->reverse_shaft ? 1 : 0);
-    ret |= tmc22xx_wrequest(dev, TMC2209_REG_GCONF, data->gconf);
+    ret |= tmc22xx_wrequest_confirmed(dev, TMC2209_REG_GCONF, data->gconf);
     data->chopconf = (data->chopconf & ~GENMASK(27, 24)) | FIELD_PREP(GENMASK(27, 24), mres);
-    ret |= tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
+    ret |= tmc22xx_wrequest_confirmed(dev, TMC2209_REG_CHOPCONF, data->chopconf);
     return ret;
 }
 
@@ -154,12 +175,7 @@ static int tmc22xx_enable_uart(const struct device *dev, bool enable)
     struct tmc22xx_pokibot_data *data = (struct tmc22xx_pokibot_data *)dev->data;
     data->chopconf =
         (data->chopconf & ~GENMASK(3, 0)) | FIELD_PREP(GENMASK(3, 0), enable ? 0xF : 0);
-    return tmc22xx_wrequest(dev, TMC2209_REG_CHOPCONF, data->chopconf);
-}
-
-static int tmc22xx_get_ifcnt(const struct device *dev, uint32_t *ifcnt)
-{
-    return tmc22xx_rrequest(dev, TMC2209_REG_IFCNT, ifcnt);
+    return tmc22xx_wrequest_confirmed(dev, TMC2209_REG_CHOPCONF, data->chopconf);
 }
 
 static int tmc22xx_get_sg_result(const struct device *dev, uint8_t *sg_result)
@@ -378,16 +394,12 @@ static int tmc22xx_pokstepper_init(const struct device *dev)
         gpio_pin_set_dt(&config->nstdby, 1);
     }
 
-    uint32_t ifcnt;
-    tmc22xx_get_ifcnt(dev, &ifcnt);
-    tmc22xx_set_senddelay(dev, 2);
-    tmc22xx_set_mres(dev, RESOLUTION_TO_MRES(data->resolution));
-    tmc22xx_set_ihold_irun(dev, data->ihold, data->irun, data->iholddelay);
-    tmc22xx_pokstepper_set_speed(dev, 0);
-    uint32_t ifcnt_after;
-    tmc22xx_get_ifcnt(dev, &ifcnt_after);
-    if (ifcnt_after - ifcnt != 5) {
-        LOG_ERR("tmc conf incorrect ifcnt %d | ifcnt_after %d", ifcnt, ifcnt_after);
+    ret |= tmc22xx_set_senddelay(dev, 2);
+    ret |= tmc22xx_set_mres(dev, RESOLUTION_TO_MRES(data->resolution));
+    ret |= tmc22xx_set_ihold_irun(dev, data->ihold, data->irun, data->iholddelay);
+    ret |= tmc22xx_pokstepper_set_speed(dev, 0);
+    if (ret) {
+        LOG_ERR("tmc conf incorrect");
     }
 
     if (tmc22xx_can_do_step_dir(dev)) {
