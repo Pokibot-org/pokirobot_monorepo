@@ -399,8 +399,8 @@ int main(void)
     LOG_INF("Regiter static obstacles: OK");
 
     // Wait for the starting cord to be put in to init few things
-    while (pokuicom_get_match_status() != POKUICOM_MATCH_STATUS_SETUP) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STATUS);
+    while (pokuicom_get_tirette_status() != POKTOCOL_TIRETTE_STATUS_PLUGGED) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS);
         k_sleep(K_MSEC(10));
     }
 
@@ -408,7 +408,7 @@ int main(void)
     pokarm_deploy(false);
     pokarm_reset_pos();
 
-    LOG_INF("Init of all the actuatos: OK");
+    LOG_INF("Init of all the actuators: OK");
 
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {
@@ -417,8 +417,8 @@ int main(void)
     }
     LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
 
-    while (pokuicom_get_match_status() != POKUICOM_MATCH_STATUS_STARTED) {
-        pokuicom_request(POKTOCOL_DATA_TYPE_UI_MATCH_STATUS);
+    while (pokuicom_get_tirette_status() != POKTOCOL_TIRETTE_STATUS_UNPLUGGED) {
+        pokuicom_request(POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS);
         k_sleep(K_MSEC(10));
     }
 
@@ -426,6 +426,14 @@ int main(void)
     k_work_schedule(&pomi_activate_work, K_SECONDS(85));
     k_work_schedule(&end_of_match_work, K_SECONDS(109));
 
-    match(color);
+
+    // match(color);
+    const pos2_t start_pos = {.x = 0.0f, .y = 0.0f, .a = 0.0f};
+    strat_set_pos(color, &start_pos);
+    strat_set_break(false);
+    const pos2_t forward_pos = {.x = 0.0f, .y = 1.0f, .a = 0.0f};
+    strat_go_to_direct(color, &forward_pos, K_FOREVER);
+    uint32_t events;
+    nav_wait_events(&events);
     return 0;
 }

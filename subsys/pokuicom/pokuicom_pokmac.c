@@ -10,13 +10,13 @@ LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_pokuicom));
 
-enum pokuicom_match_status match_status = POKUICOM_MATCH_STATUS_UNKNOWN;
+enum pokprotocol_tirette_status tirette_status = POKTOCOL_TIRETTE_STATUS_UNKNOWN;
 bool has_color_info = false;
 enum pokprotocol_team received_color;
 
 static void pokuicom_receive(struct poktocol_msg *msg)
 {
-    LOG_INF("Received msg type %d", msg->header.type);
+    LOG_DBG("Received msg type %d", msg->header.type);
 
     switch (msg->header.type) {
         case POKTOCOL_DATA_TYPE_UI_SCORE:
@@ -25,8 +25,8 @@ static void pokuicom_receive(struct poktocol_msg *msg)
             has_color_info = true;
             received_color = msg->data.team;
             break;
-        case POKTOCOL_DATA_TYPE_UI_MATCH_STATUS:
-            match_status = (enum pokuicom_match_status)msg->data.match_status;
+        case POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS:
+            tirette_status = msg->data.tirette_status;
             break;
         default:
             break;
@@ -60,9 +60,9 @@ void pokuicom_send_score(uint8_t score)
     pokuicom_send(&msg);
 }
 
-enum pokuicom_match_status pokuicom_get_match_status(void)
+enum pokprotocol_tirette_status pokuicom_get_tirette_status(void)
 {
-    return match_status;
+    return tirette_status;
 }
 
 int pokuicom_get_team_color(enum pokprotocol_team *color)
@@ -76,13 +76,12 @@ int pokuicom_get_team_color(enum pokprotocol_team *color)
 
 void rx_cv(uint8_t *payload_data, size_t payload_size)
 {
-    static uint8_t buffer[16];
     static struct poktocol_msg msg;
-    if (poktocol_decode_header(buffer, sizeof(buffer), &msg.header) < 0) {
+    if (poktocol_decode_header(payload_data, payload_size, &msg.header) < 0) {
         LOG_ERR("poktocol_decode error");
         return;
     }
-    if (poktocol_decode_data(buffer, sizeof(buffer), &msg.data) < 0) {
+    if (poktocol_decode_data(payload_data, payload_size, &msg.data) < 0) {
         LOG_ERR("poktocol_decode error");
         return;
     }
