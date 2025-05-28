@@ -265,20 +265,7 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos)
     }
 
     pos.x = -pos.x;
-    return pos;
-}
-
-struct pos2 convert_pos_with_angle_for_team(enum pokprotocol_team color, struct pos2 pos)
-{
-    if (color == POKTOCOL_TEAM_BLUE) {
-        return pos;
-    }
-
-    pos.x = -pos.x;
-    pos.a = pos.a + M_PI;
-    if (pos.a > 2 * M_PI) {
-        pos.a -= 2 * M_PI;
-    }
+    // TODO: MIRROR ANGLE
     return pos;
 }
 
