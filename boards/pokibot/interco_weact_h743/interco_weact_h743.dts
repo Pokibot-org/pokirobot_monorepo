@@ -30,6 +30,10 @@
 			gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
 			label = "User LED";
 		};
+		rf_pin_set: rf_pin_set {
+			gpios = <&gpioc 12 GPIO_ACTIVE_HIGH>;
+			label = "RF pin set";
+		};
 	};
 
 	gpio_keys {
@@ -200,7 +204,9 @@
 	d1cpre = <1>;
 	hpre = <2>;
 	d1ppre = <1>;
-	d2ppre1 = <1>;
+	// d2ppre1 = <1>;
+	// NEEDED FOR LOW SPEED USART3
+	d2ppre1 = <2>;
 	d2ppre2 = <1>;
 	d3ppre = <1>;
 };

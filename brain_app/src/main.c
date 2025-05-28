@@ -388,6 +388,13 @@ int match(enum pokprotocol_team color)
 }
 #endif
 
+void test_pomicontrol(void) {
+    while (1) {
+        pomicontrol_activate();
+        k_sleep(K_MSEC(1000));
+    }
+}
+
 int main(void)
 {
     LOG_INF("Pokibot main start");
@@ -427,13 +434,13 @@ int main(void)
     k_work_schedule(&end_of_match_work, K_SECONDS(109));
 
 
-    // match(color);
-    const pos2_t start_pos = {.x = 0.0f, .y = 0.0f, .a = 0.0f};
-    strat_set_pos(color, &start_pos);
-    strat_set_break(false);
-    const pos2_t forward_pos = {.x = 0.0f, .y = 1.0f, .a = 0.0f};
-    strat_go_to_direct(color, &forward_pos, K_FOREVER);
-    uint32_t events;
-    nav_wait_events(&events);
+    match(color);
+    // const pos2_t start_pos = {.x = 0.0f, .y = 0.0f, .a = 0.0f};
+    // strat_set_pos(color, &start_pos);
+    // strat_set_break(false);
+    // const pos2_t forward_pos = {.x = 0.0f, .y = 1.0f, .a = 0.0f};
+    // strat_go_to_direct(color, &forward_pos, K_FOREVER);
+    // uint32_t events;
+    // nav_wait_events(&events);
     return 0;
 }
