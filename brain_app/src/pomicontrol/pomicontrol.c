@@ -61,8 +61,6 @@ void pomicontrol_configure(void) {
 }
 */
 
-#include <stm32h7xx_ll_usart.h>
-
 int pomicontrol_init(void)
 {
     struct uart_config cfg = {
@@ -73,9 +71,6 @@ int pomicontrol_init(void)
         .parity = UART_CFG_PARITY_NONE,
     };
     uart_configure(dev, &cfg);
-    // LL_USART_SetPrescaler(USART3, LL_USART_PRESCALER_DIV32);
-    // 120000000
-    // LL_USART_SetBaudRate(USART3, 120000000, LL_USART_PRESCALER_DIV4, LL_USART_OVERSAMPLING_16, 1200);
     // pomicontrol_configure();
     return 0;
 }
