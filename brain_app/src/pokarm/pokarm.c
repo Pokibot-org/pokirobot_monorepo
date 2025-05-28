@@ -33,7 +33,7 @@ void pokarm_deploy(bool state)
 {
     LOG_INF("Pokarm deploy %d", state);
     if (state) {
-        servomotor_set_angle(servo_deploy, DEG_TO_RAD(0));
+        servomotor_set_angle(servo_deploy, DEG_TO_RAD(24));
     } else {
         servomotor_set_angle(servo_deploy, DEG_TO_RAD(85));
     }
