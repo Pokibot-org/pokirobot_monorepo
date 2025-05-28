@@ -12,8 +12,11 @@ uint8_t tx_buffer[64];
 
 static struct k_work publish_work;
 static struct k_timer publish_timer;
+K_THREAD_STACK_DEFINE(com_wq_area, 1024);
+struct k_work_q com_wq;
 
-static void encode_and_send(const struct poktocol_msg *msg) {
+static void encode_and_send(const struct poktocol_msg *msg)
+{
     int size = poktocol_encode(msg, tx_buffer, sizeof(tx_buffer));
     if (size <= 0) {
         LOG_ERR("Encode error");
@@ -25,10 +28,11 @@ static void encode_and_send(const struct poktocol_msg *msg) {
 void publish_work_handler(struct k_work *work)
 {
     struct poktocol_msg msg = {
-        .header = {
-            .cmd = POKTOCOL_CMD_TYPE_WRITE,
-            .type = POKTOCOL_DATA_TYPE_LEGS_NAV_DATA,
-        },
+        .header =
+            {
+                .cmd = POKTOCOL_CMD_TYPE_WRITE,
+                .type = POKTOCOL_DATA_TYPE_LEGS_NAV_DATA,
+            },
     };
     control_get_pos(&msg.data.legs_nav_data.pos);
     control_get_dir(&msg.data.legs_nav_data.dir);
@@ -37,8 +41,8 @@ void publish_work_handler(struct k_work *work)
     encode_and_send(&msg);
 }
 
-
-static void com_rx_payload(uint8_t *payload_data, size_t payload_size) {
+static void com_rx_payload(uint8_t *payload_data, size_t payload_size)
+{
     LOG_DBG("rx data of size %d", payload_size);
     struct poktocol_header msg;
     if (poktocol_decode_header(payload_data, payload_size, &msg)) {
@@ -51,66 +55,58 @@ static void com_rx_payload(uint8_t *payload_data, size_t payload_size) {
     }
 
     switch (msg.type) {
-        case POKTOCOL_DATA_TYPE_LEGS_POS:
-            {
-                union poktocol_msg_data data;
-                if (poktocol_decode_data(payload_data, payload_size, &data)) {
-                    LOG_ERR("Err decoding pos");
-                    return;
-                }
-                data.legs_pos.x *= 1000;
-                data.legs_pos.y *= 1000;
-                control_set_pos(data.legs_pos);
+        case POKTOCOL_DATA_TYPE_LEGS_POS: {
+            union poktocol_msg_data data;
+            if (poktocol_decode_data(payload_data, payload_size, &data)) {
+                LOG_ERR("Err decoding pos");
+                return;
             }
-            break;
-        case POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS:
-            {
-                union poktocol_msg_data data = {
-                    .waypoints.wps = wps_buffer
-                };
-                if (poktocol_decode_data(payload_data, payload_size, &data)) {
-                    LOG_ERR("Err decoding wps");
-                    return;
-                }
-                for (int i = 0; i < data.waypoints.nb_wps; i++) {
-                    data.waypoints.wps[i].x *= 1000;
-                    data.waypoints.wps[i].y *= 1000;
-                }
-                control_set_waypoints(data.waypoints.wps, data.waypoints.nb_wps);
+            data.legs_pos.x *= 1000;
+            data.legs_pos.y *= 1000;
+            control_set_pos(data.legs_pos);
+        } break;
+        case POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS: {
+            union poktocol_msg_data data = {.waypoints.wps = wps_buffer};
+            if (poktocol_decode_data(payload_data, payload_size, &data)) {
+                LOG_ERR("Err decoding wps");
+                return;
             }
-            break;
-        case POKTOCOL_DATA_TYPE_LEGS_BREAK:
-            {
-                union poktocol_msg_data data;
-                if (poktocol_decode_data(payload_data, payload_size, &data)) {
-                    LOG_ERR("Err decoding break");
-                    return;
-                }
-                control_set_brake(data.legs_break);
+            for (int i = 0; i < data.waypoints.nb_wps; i++) {
+                data.waypoints.wps[i].x *= 1000;
+                data.waypoints.wps[i].y *= 1000;
             }
-            break;
+            control_set_waypoints(data.waypoints.wps, data.waypoints.nb_wps);
+        } break;
+        case POKTOCOL_DATA_TYPE_LEGS_BREAK: {
+            union poktocol_msg_data data;
+            if (poktocol_decode_data(payload_data, payload_size, &data)) {
+                LOG_ERR("Err decoding break");
+                return;
+            }
+            control_set_brake(data.legs_break);
+        } break;
         default:
             LOG_ERR("Unsupported data type %d", msg.type);
             break;
     }
 }
 
-
 void publish_timer_expiry(struct k_timer *timer)
 {
-    k_work_submit(&publish_work);
+    k_work_submit_to_queue(&com_wq, &publish_work);
 }
 
 int com_start(void)
 {
+    k_work_queue_init(&com_wq);
+    k_work_queue_start(&com_wq, com_wq_area, K_THREAD_STACK_SIZEOF(com_wq_area), 12, NULL);
+
     k_work_init(&publish_work, publish_work_handler);
     k_timer_init(&publish_timer, publish_timer_expiry, NULL);
 
-    static struct pokmac_recv_callback clbk = {
-        .cb = com_rx_payload
-    };
+    static struct pokmac_recv_callback clbk = {.cb = com_rx_payload};
     pokmac_register_recv_callback(pokmac_dev, &clbk);
 
-    k_timer_start(&publish_timer, K_NO_WAIT, K_MSEC(MSEC_PER_SEC/100));
+    k_timer_start(&publish_timer, K_NO_WAIT, K_MSEC(MSEC_PER_SEC / 50));
     return 0;
 }

@@ -28,6 +28,7 @@ int main(void)
     control_start();
     com_start();
     gpio_pin_configure_dt(&led1, GPIO_OUTPUT_HIGH);
+
     // _test_motor_cmd();
     // _test_calibration_angle();
     // do_square();
