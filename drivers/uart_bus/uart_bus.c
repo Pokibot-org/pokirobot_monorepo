@@ -8,11 +8,19 @@
 
 LOG_MODULE_REGISTER(uart_bus, CONFIG_UART_BUS_LOG_LEVEL);
 
+#define UART_BUS_MAX_BUFFER 64
+
 struct uart_bus_config {
     const struct device *uart_dev;
 };
 
+struct uart_bus_buffers {
+    uint8_t tx[UART_BUS_MAX_BUFFER];
+    uint8_t rx[UART_BUS_MAX_BUFFER];
+};
+
 struct uart_bus_data {
+    struct uart_bus_buffers *buffers;
     struct k_mutex access_mutex;
     struct k_sem rx_ready;
 #ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
@@ -44,7 +52,7 @@ void uart_bus_callback(const struct device *dev, struct uart_event *evt, void *u
 }
 
 int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size_t tx_len,
-                             size_t rx_len, uint8_t **rx_buffer, k_timeout_t timeout)
+                          size_t rx_len, uint8_t *rx_buffer, k_timeout_t timeout)
 {
     const struct uart_bus_config *cfg = dev->config;
     struct uart_bus_data *data = dev->data;
@@ -53,10 +61,16 @@ int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size
     int64_t t_start;
 #endif
 
+    if (tx_len + rx_len > UART_BUS_MAX_BUFFER) {
+        return -ENOMEM;
+    }
+
     k_timepoint_t expiry = sys_timepoint_calc(timeout);
 
     k_mutex_lock(&data->access_mutex, sys_timepoint_timeout(expiry));
     k_sem_reset(&data->rx_ready);
+
+    memcpy(data->buffers->tx, tx_data, tx_len);
 
     /* clear all the received bytes in case the uart driver implement a fifo and
     we received unexpected bytes. */
@@ -64,7 +78,7 @@ int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size
     while (!uart_poll_in(cfg->uart_dev, &none)) {
     }
 
-    ret = uart_rx_enable(cfg->uart_dev, *rx_buffer, tx_len + rx_len, SYS_FOREVER_US);
+    ret = uart_rx_enable(cfg->uart_dev, data->buffers->rx, tx_len + rx_len, SYS_FOREVER_US);
     if (ret < 0) {
         LOG_DBG("failed to setup rx: %d", ret);
         goto cleanup0;
@@ -74,7 +88,7 @@ int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size
     t_start = k_uptime_get();
 #endif
 
-    ret = uart_tx(cfg->uart_dev, tx_data, tx_len, SYS_FOREVER_US);
+    ret = uart_tx(cfg->uart_dev, data->buffers->tx, tx_len, SYS_FOREVER_US);
     if (ret < 0) {
         LOG_DBG("failed to setup tx: %d", ret);
         goto cleanup1;
@@ -87,7 +101,7 @@ int uart_bus_send_receive(const struct device *dev, const uint8_t *tx_data, size
     }
 
     /* update the rx buffer pointer to the start of rx_data */
-    *rx_buffer = *rx_buffer + tx_len;
+    memcpy(rx_buffer, &data->buffers->rx[tx_len], rx_len);
 
 #ifdef CONFIG_UART_BUS_LOG_LEVEL_DBG
     const int d_tx = (int)(data->t_tx_done - t_start);
@@ -139,13 +153,13 @@ static int uart_bus_init(const struct device *dev)
     return 0;
 }
 
-#define UART_BUS_INIT(inst)                                                                     \
-    static const struct uart_bus_config uart_bus_cfg_##inst = {                              \
+#define UART_BUS_INIT(inst)                                                                        \
+    static struct uart_bus_buffers __nocache buffers_##inst;                                       \
+    static const struct uart_bus_config uart_bus_cfg_##inst = {                                    \
         .uart_dev = DEVICE_DT_GET(DT_INST_BUS(inst)),                                              \
     };                                                                                             \
-    static struct uart_bus_data uart_bus_data_##inst = {};                                   \
-    DEVICE_DT_INST_DEFINE(inst, &uart_bus_init, NULL, &uart_bus_data_##inst,                 \
-                          &uart_bus_cfg_##inst, POST_KERNEL, CONFIG_UART_BUS_INIT_PRIORITY,  \
-                          NULL);
+    static struct uart_bus_data uart_bus_data_##inst = {.buffers = &buffers_##inst};                \
+    DEVICE_DT_INST_DEFINE(inst, &uart_bus_init, NULL, &uart_bus_data_##inst, &uart_bus_cfg_##inst, \
+                          POST_KERNEL, CONFIG_UART_BUS_INIT_PRIORITY, NULL);
 
 DT_INST_FOREACH_STATUS_OKAY(UART_BUS_INIT)

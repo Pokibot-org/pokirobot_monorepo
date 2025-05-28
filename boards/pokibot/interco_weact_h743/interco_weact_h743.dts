@@ -392,8 +392,8 @@ zephyr_camera_dvp: &dcmi {
 };
 
 &uart7 {
-	dmas = <&dmamux1 8 123 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
-		<&dmamux1 0 122 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
+	dmas = <&dmamux1 8 80 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>,
+		<&dmamux1 0 79 (STM32_DMA_PERIPH_RX | STM32_DMA_PRIORITY_HIGH)>;
 	dma-names = "tx", "rx";
 	pinctrl-0 = <&uart7_tx_pe8 &uart7_rx_pe7>;
 	pinctrl-names = "default";

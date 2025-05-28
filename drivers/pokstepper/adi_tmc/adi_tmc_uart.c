@@ -37,26 +37,25 @@ int tmc_reg_read(const struct device *uart_bus_dev, uint8_t slave_address, uint8
 {
     const uint8_t tx_len = 4;
     const uint8_t rx_len = 8;
-    uint8_t rx_buf[tx_len + rx_len];
-    uint8_t *rx_data = rx_buf;
     uint8_t tx_buf[] = {SYNC_NIBBLE, slave_address, reg, 0};
+    uint8_t rx_buf[rx_len];
 
     tx_buf[tx_len - 1] = tmc_uart_crc(tx_buf, tx_len - 1);
 
-    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, &rx_data,
+    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, rx_buf,
                                  TMC_ANSWER_TIMEOUT)) {
         LOG_WRN("tmc reg read timeout: 0x%02x/0x%02x", slave_address, reg);
         return -ETIMEDOUT;
     }
 
-    uint8_t calc_crc = tmc_uart_crc(rx_data, rx_len - 1);
-    if (calc_crc != rx_data[rx_len - 1]) {
-        LOG_WRN("tmc reg read wrong crc (wanted %d got %d)", calc_crc, rx_data[rx_len - 1]);
-        LOG_HEXDUMP_DBG(rx_data, rx_len, "rx frame");
+    uint8_t calc_crc = tmc_uart_crc(rx_buf, rx_len - 1);
+    if (calc_crc != rx_buf[rx_len - 1]) {
+        LOG_WRN("tmc reg read wrong crc (wanted %d got %d)", calc_crc, rx_buf[rx_len - 1]);
+        LOG_HEXDUMP_DBG(rx_buf, rx_len, "rx frame");
         return -EIO;
     }
 
-    *data = sys_get_be32(&rx_data[3]);
+    *data = sys_get_be32(&rx_buf[3]);
     return 0;
 }
 
@@ -66,14 +65,12 @@ int tmc_reg_write(const struct device *uart_bus_dev, uint8_t slave_address, uint
 
     const uint8_t tx_len = 8;
     const uint8_t rx_len = 0;
-    uint8_t rx_buf[tx_len + rx_len];
-    uint8_t *rx_data = rx_buf;
 
     uint8_t tx_buf[] = {SYNC_NIBBLE, slave_address, REG_WRITE_BIT | reg, 0, 0, 0, 0, 0};
     sys_put_be32(value, &tx_buf[3]);
     tx_buf[tx_len - 1] = tmc_uart_crc(tx_buf, tx_len - 1);
 
-    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, &rx_data,
+    if (uart_bus_send_receive(uart_bus_dev, tx_buf, tx_len, rx_len, NULL,
                                  TMC_ANSWER_TIMEOUT)) {
         LOG_WRN("tmc reg write timeout");
         return -ETIMEDOUT;
