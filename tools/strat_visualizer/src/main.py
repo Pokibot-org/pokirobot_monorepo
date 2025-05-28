@@ -462,6 +462,7 @@ class PokibotGameSimulator:
         # self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
         self.visualizer = PokibotGameVisualizer(self.world)
+        self.last_robot_team = 0
 
     def run(self):
         self.msms.start()
@@ -472,7 +473,8 @@ class PokibotGameSimulator:
 
     def on_device_connection(self, dev_name, dev_id):
         if dev_id not in self.pokirobot_sim_nodes.keys():
-            robot, pokirobot = pokirobot_builder(dev_id, self.msms, self.world)
+            robot, pokirobot = pokirobot_builder(dev_id, self.msms, self.world, self.last_robot_team)
+            self.last_robot_team = (self.last_robot_team + 1) % 2
             self.world.robots["pokirobot_" + dev_id] = robot
             self.pokirobot_sim_nodes[dev_id] = pokirobot
 

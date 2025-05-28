@@ -10,7 +10,7 @@
 
 LOG_MODULE_REGISTER(pokuicom, CONFIG_POKUICOM_LOG_LEVEL);
 
-enum pokuicom_match_status match_status = POKUICOM_MATCH_STATUS_UNKNOWN;
+enum pokprotocol_tirette_status tirette_status = POKTOCOL_TIRETTE_STATUS_UNKNOWN;
 bool has_color_info = false;
 enum pokprotocol_team received_color;
 
@@ -33,9 +33,9 @@ void pokuicom_send_score(uint8_t score)
     return;
 }
 
-enum pokuicom_match_status pokuicom_get_match_status(void)
+enum pokprotocol_tirette_status pokuicom_get_tirette_status(void)
 {
-    return match_status;
+    return tirette_status;
 }
 
 int pokuicom_get_team_color(enum pokprotocol_team *color)
@@ -53,8 +53,8 @@ void team_clbk(char *data, int len, void *user_data) {
 }
 
 void match_clbk(char *data, int len, void *user_data) {
-    sscanf(data, "%d", (int*)&match_status);
-    LOG_INF("match_status %d", match_status);
+    sscanf(data, "%d", (int*)&tirette_status);
+    LOG_INF("tirette_status %d", tirette_status);
 }
 
 int pokuicom_init(void)
