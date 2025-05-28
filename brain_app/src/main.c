@@ -265,6 +265,20 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos)
     }
 
     pos.x = -pos.x;
+    // pos.a = pos.a + M_PI;
+    // if (pos.a > 2 * M_PI) {
+    //     pos.a -= 2 * M_PI;
+    // }
+    return pos;
+}
+
+struct pos2 convert_pos_with_angle_for_team(enum pokprotocol_team color, struct pos2 pos)
+{
+    if (color == POKTOCOL_TEAM_BLUE) {
+        return pos;
+    }
+
+    pos.x = -pos.x;
     pos.a = pos.a + M_PI;
     if (pos.a > 2 * M_PI) {
         pos.a -= 2 * M_PI;
@@ -272,26 +286,17 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos)
     return pos;
 }
 
-int strat_set_break(bool status)
+int strat_go_to(enum pokprotocol_team color, const pos2_t *pos, float angle_offset, k_timeout_t timeout)
 {
-    return nav_set_break(status);
-}
-
-int strat_set_pos(enum pokprotocol_team color, const pos2_t *pos)
-{
-    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
-    return nav_set_pos(&converted_pos);
-}
-
-int strat_go_to(enum pokprotocol_team color, const pos2_t *pos, k_timeout_t timeout)
-{
-    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    converted_pos.a += angle_offset;
     return nav_go_to(&converted_pos, timeout);
 }
 
-int strat_go_to_direct(enum pokprotocol_team color, const pos2_t *pos, k_timeout_t timeout)
+int strat_go_to_direct(enum pokprotocol_team color, const pos2_t *pos, float angle_offset, k_timeout_t timeout)
 {
-    const pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    pos2_t converted_pos = convert_pos_for_team(color, *pos);
+    converted_pos.a += angle_offset;
     return nav_go_to_direct(&converted_pos, timeout);
 }
 
@@ -310,35 +315,41 @@ void end_of_match_work_handler(struct k_work *work)
 #if CONFIG_POKISTRAT_MAIN
 int match(enum pokprotocol_team color)
 {
-    const pos2_t start_pos = CONVERT_POINT2_TO_POS2(start_zone.data.rectangle.point, 0.0f);
-    strat_set_pos(color, &start_pos);
-    strat_set_break(false);
+    pos2_t start_pos = CONVERT_POINT2_TO_POS2(convert_point_for_team(color, start_zone.data.rectangle.point), 0.0f);
+    nav_set_pos(&start_pos);
+    nav_set_break(false);
 
-    const pos2_t wp1 = {.x = start_pos.x, .y = 0.6f, .a = 0};
-    const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
-    const pos2_t wp3 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
-    const pos2_t wp4 = {.x = BOARD_MIN_X + 2.225f, .y = STAND_DROP_DISTANCE_FROM_BORDER + ROBOT_CENTER_TO_GRIPPER_DIST, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
+    const pos2_t wp1 = {.x = start_zone.data.rectangle.point.x, .y = 0.6f, .a = 0.0f};
+    const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = 0.0f };
+    const pos2_t wp3 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = 0.0f};
+    const pos2_t wp4 = {
+        .x = BOARD_MIN_X + 2.225f,
+        .y = STAND_DROP_DISTANCE_FROM_BORDER + ROBOT_CENTER_TO_GRIPPER_DIST,
+        .a = 0.0f
+    };
 
-    const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET);
+    const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2);
+
+    const float consigne_a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET;
 
     LOG_INF("Leaving start zone");
     uint32_t nav_events;
-    strat_go_to_direct(color, &wp1, K_FOREVER);
+    strat_go_to_direct(color, &wp1, 0.0f, K_FOREVER);
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
-    strat_go_to_direct(color, &wp2, K_FOREVER);
+    strat_go_to_direct(color, &wp2, consigne_a, K_FOREVER);
     nav_wait_events(&nav_events);
-    strat_go_to_direct(color, &wp3, K_FOREVER);
+    strat_go_to_direct(color, &wp3, consigne_a, K_FOREVER);
     nav_wait_events(&nav_events);
 
     pokarm_deploy(true);
 
-    strat_go_to_direct(color, &wp4, K_FOREVER);
+    strat_go_to_direct(color, &wp4, consigne_a, K_FOREVER);
     nav_wait_events(&nav_events);
-    strat_go_to_direct(color, &wp3, K_FOREVER);
+    strat_go_to_direct(color, &wp3, consigne_a, K_FOREVER);
     nav_wait_events(&nav_events);
 
-    strat_go_to(color, &end_pos, K_FOREVER);
+    strat_go_to(color, &end_pos, consigne_a, K_FOREVER);
     nav_wait_events(&nav_events);
 
     k_sleep(K_FOREVER);
@@ -348,42 +359,6 @@ int match(enum pokprotocol_team color)
 // FOR CERTIF
 int match(enum pokprotocol_team color)
 {
-    const pos2_t start_pos = {.x = BOARD_MIN_X + 1.775f, .y = 0.225f, .a = 0.0f};
-    strat_set_pos(color, &start_pos);
-    strat_set_break(false);
-
-    const pos2_t wp1 = {.x = start_pos.x, .y = 0.6f, .a = 0};
-    const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
-    const pos2_t wp3 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
-    const pos2_t wp4 = {.x = BOARD_MIN_X + 2.225f, .y = STAND_DROP_DISTANCE_FROM_BORDER + ROBOT_CENTER_TO_GRIPPER_DIST, .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET};
-
-    const pos2_t end_pos = {
-        .x = BOARD_MIN_X + 2.625f,
-        .y = 1.775f,
-        .a = -M_PI/2 - ROBOT_ARM_ANGLE_OFFSET
-    };
-
-    LOG_INF("Leaving start zone");
-    uint32_t nav_events;
-    strat_go_to_direct(color, &wp1, K_FOREVER);
-    nav_wait_events(&nav_events);
-    LOG_INF("Left start zone");
-    strat_go_to_direct(color, &wp2, K_FOREVER);
-    nav_wait_events(&nav_events);
-    strat_go_to_direct(color, &wp3, K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    pokarm_deploy(true);
-
-    strat_go_to_direct(color, &wp4, K_FOREVER);
-    nav_wait_events(&nav_events);
-    strat_go_to_direct(color, &wp3, K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    strat_go_to(color, &end_pos, K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    k_sleep(K_FOREVER);
     return 0;
 }
 #endif
@@ -413,7 +388,6 @@ int main(void)
 
     pokarm_pinch(false);
     pokarm_deploy(false);
-    pokarm_reset_pos();
 
     LOG_INF("Init of all the actuators: OK");
 
@@ -433,14 +407,6 @@ int main(void)
     k_work_schedule(&pomi_activate_work, K_SECONDS(85));
     k_work_schedule(&end_of_match_work, K_SECONDS(109));
 
-
     match(color);
-    // const pos2_t start_pos = {.x = 0.0f, .y = 0.0f, .a = 0.0f};
-    // strat_set_pos(color, &start_pos);
-    // strat_set_break(false);
-    // const pos2_t forward_pos = {.x = 0.0f, .y = 1.0f, .a = 0.0f};
-    // strat_go_to_direct(color, &forward_pos, K_FOREVER);
-    // uint32_t events;
-    // nav_wait_events(&events);
     return 0;
 }
