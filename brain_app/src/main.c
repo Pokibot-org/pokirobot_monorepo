@@ -265,10 +265,6 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos)
     }
 
     pos.x = -pos.x;
-    // pos.a = pos.a + M_PI;
-    // if (pos.a > 2 * M_PI) {
-    //     pos.a -= 2 * M_PI;
-    // }
     return pos;
 }
 
