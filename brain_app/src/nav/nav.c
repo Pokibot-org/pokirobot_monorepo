@@ -151,9 +151,9 @@ static void log_astar_grid(char *current_grid, int start, int end) {
     }
 }
 
-int nav_set_pos(const pos2_t *pos)
+int nav_set_pos(const pos2_t pos)
 {
-    return poklegscom_set_pos(pos);
+    return poklegscom_set_pos(&pos);
 }
 
 int nav_set_break(bool status)
@@ -214,7 +214,7 @@ static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, con
     return 0;
 }
 
-static int go_to_with_pathfinding_easy(const pos2_t *target_pos)
+static int go_to_with_pathfinding_easy(const pos2_t target_pos)
 {
     pos2_t robot_pos;
     poklegscom_get_pos(&robot_pos);
@@ -222,7 +222,7 @@ static int go_to_with_pathfinding_easy(const pos2_t *target_pos)
                                       BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
     memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
     in_use_astar_grid[start] = ASTAR_NODE_EMPTY;
-    return go_to_with_pathfinding(in_use_astar_grid, &robot_pos, target_pos);
+    return go_to_with_pathfinding(in_use_astar_grid, &robot_pos, &target_pos);
 }
 
 static void nav_stop_all(void)
@@ -234,12 +234,12 @@ static void nav_stop_all(void)
     had_a_target_pos = false;
 }
 
-int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
+int nav_go_to(const pos2_t pos, k_timeout_t timeout)
 {
-    LOG_DBG(LOG_POS_ARGS("target", *pos));
+    LOG_DBG(LOG_POS_ARGS("target", pos));
     nav_stop_all();
     k_event_clear(&nav_events, 0xFFFFFFFF);
-    target_pos = *pos;
+    target_pos = pos;
     had_a_target_pos = true;
     current_mode = NAV_MODE_WITH_PATHFINDING;
     if (!current_obstacle_detected_state) {
@@ -252,18 +252,18 @@ int nav_go_to(const pos2_t *pos, k_timeout_t timeout)
     return 0;
 }
 
-int nav_go_to_direct(const pos2_t *pos, k_timeout_t timeout)
+int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout)
 {
-    LOG_DBG(LOG_POS_ARGS("target", *pos));
+    LOG_DBG(LOG_POS_ARGS("target", pos));
     nav_stop_all();
     k_event_clear(&nav_events, 0xFFFFFFFF);
-    target_pos = *pos;
+    target_pos = pos;
     had_a_target_pos = true;
     current_mode = NAV_MODE_DIRECT;
     if (!current_obstacle_detected_state) {
         poklegscom_set_break(0);
     }
-    poklegscom_set_waypoints(pos, 1);
+    poklegscom_set_waypoints(&pos, 1);
     k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
     k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
     return 0;
