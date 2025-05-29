@@ -7,4 +7,5 @@ void pokarm_deploy(bool state);
 void pokarm_pinch(bool state);
 void pokarm_lift(bool state);
 
+void banner_deploy(bool state);
 #endif

@@ -112,7 +112,7 @@
             max-angle = <180>;
         };
 
-        servo4 {
+        servo_banner:servo4 {
             status = "okay";
             compatible = "pokibot,pwm-servomotor";
             pwms = <&pwm1 2 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
@@ -392,7 +392,7 @@ zephyr_camera_dvp: &dcmi {
 
 &timers2 {
 	status = "okay";
-	st,prescaler = <100>;
+	st,prescaler = <10>;
 
 	counter_stepper0: counter {
 		status = "okay";
@@ -420,9 +420,9 @@ zephyr_camera_dvp: &dcmi {
 			step-gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;
 
 			address = <0>;
-			micro-step-res = <256>;
-			ihold = <8>;
-			irun = <8>;
+			micro-step-res = <16>;
+			ihold = <12>;
+			irun = <26>;
 			iholddelay = <10>;
 		};
 	};
