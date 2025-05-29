@@ -383,8 +383,8 @@ static bool is_obstacled_too_close(float angle_dist, float distance)
     if (distance > LIDAR_STOP_DISTANCE_MAX) {
         return false;
     }
-    float ratio = sqrtf(MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
-                       (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN));
+    float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
+                       (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
     float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
     return angle_dist < test_angle / 2;
 }
