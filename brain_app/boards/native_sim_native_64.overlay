@@ -30,4 +30,9 @@ aliases {
         status = "okay";
         compatible = "pokibot,empty-servomotor";
     };
+
+    servo_banner: servo_banner {
+        status = "okay";
+        compatible = "pokibot,empty-servomotor";
+    };
 };

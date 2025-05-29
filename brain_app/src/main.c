@@ -313,19 +313,6 @@ int match(enum pokprotocol_team color)
         .a = -M_PI/2
     };
 
-    const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2);
-    pos2_t wp0_wait_before_backstage = {
-        .a = end_pos.a,
-        .x = BOARD_MIN_X + 2.35f,
-        .y = 1.0f
-    };
-
-    pos2_t wp1_wait_before_backstage = {
-        .a = end_pos.a,
-        .x = end_pos.x - ROBOT_RADIUS / 2,
-        .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2
-    };
-
     const float consigne_a = - ROBOT_ARM_ANGLE_OFFSET;
 
     LOG_INF("Leaving start zone");
@@ -352,6 +339,19 @@ int match(enum pokprotocol_team color)
 
     pokarm_deploy(false);
     nav_set_speed(500.0f, NAV_ANGULAR_VMAX_DEFAULT);
+
+    const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2);
+    pos2_t wp0_wait_before_backstage = {
+        .a = end_pos.a,
+        .x = BOARD_MIN_X + 2.35f,
+        .y = 1.0f
+    };
+
+    pos2_t wp1_wait_before_backstage = {
+        .a = end_pos.a,
+        .x = end_pos.x + 0.05f,
+        .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2 - 0.05f
+    };
 
     nav_go_to_direct(convert_pos_for_team(color, wp0_wait_before_backstage, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -396,6 +396,13 @@ int main(void)
         nav_register_obstacle(&static_obstacles[i]);
     }
 
+    // pokarm_pinch(false);
+    // pokarm_reset_pos();
+    // k_sleep(K_MSEC(4000));
+    // pokarm_pinch(true);
+    // k_sleep(K_MSEC(1000));
+    // pokarm_lift(true);
+
     LOG_INF("Regiter static obstacles: OK");
 
     // Wait for the starting cord to be put in to init few things
@@ -404,6 +411,7 @@ int main(void)
         k_sleep(K_MSEC(10));
     }
 
+    pokarm_reset_pos();
     pokarm_pinch(false);
     pokarm_deploy(false);
 

@@ -6,7 +6,6 @@
 #include <pokibot/drivers/uart_bus.h>
 #include <stdlib.h>
 #include "adi_tmc_uart.h"
-#include "zephyr/devicetree.h"
 
 LOG_MODULE_REGISTER(tmc22xx_pokibot, CONFIG_POKSTEPPER_LOG_LEVEL);
 
