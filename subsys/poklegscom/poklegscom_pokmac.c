@@ -8,15 +8,15 @@
 LOG_MODULE_REGISTER(poklegscom, CONFIG_POKLEGSCOM_LOG_LEVEL);
 
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_CHOSEN(pokibot_poklegscom));
-uint8_t tx_buffer[512];
+static uint8_t tx_buffer[1024];
 
-pos2_t current_pos = {0};
-float current_dir = 0.0f;
+static pos2_t current_pos = {0};
+static float current_dir = 0.0f;
 
 static int encode_and_send(const struct poktocol_msg *msg, bool confirmed) {
     int size = poktocol_encode(msg, tx_buffer, sizeof(tx_buffer));
     if (size <= 0) {
-        LOG_ERR("Encode error");
+        LOG_ERR("Encode error legs type: %d", msg->header.type);
         return -1;
     }
     return pokmac_send(pokmac_dev, tx_buffer, size, confirmed);

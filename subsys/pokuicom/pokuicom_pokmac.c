@@ -38,7 +38,7 @@ static int pokuicom_send(const struct poktocol_msg *msg)
     uint8_t buffer[16];
     size_t encoded_size = poktocol_encode(msg, buffer, sizeof(buffer));
     if (encoded_size < 0) {
-        LOG_ERR("Encode error");
+        LOG_ERR("Encode error ui type: %d", msg->header.type);
         return -1;
     }
     return pokmac_send(pokmac_dev, buffer, encoded_size, false);

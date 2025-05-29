@@ -2,7 +2,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "pokibot/lib/poktocol.h"
+#include <pokibot/lib/poktocol.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(poktocol);
 
 static int pokprotocol_encode_dir(uint8_t *buffer, size_t buffer_size, const float *dir)
 {
@@ -108,6 +111,7 @@ int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buff
                 int ret = pokprotocol_encode_pos(&buffer[index], buffer_size - index,
                                                  &msg->data.waypoints.wps[i]);
                 if (ret < 0) {
+                    LOG_ERR("nb:%d i:%d %d", msg->data.waypoints.nb_wps, i, ret);
                     return -1;
                 }
                 index += ret;
