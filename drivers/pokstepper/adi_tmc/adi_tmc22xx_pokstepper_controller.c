@@ -252,6 +252,7 @@ static void step_counter_top_interrupt(const struct device *_dev, void *user_dat
         if (data->mstep_pos_in_fullstep != data->resolution) {
             return;
         }
+        data->mstep_pos_in_fullstep = 0;
         data->pos += data->pos_increment;
         if (data->pos == data->target_pos) {
             counter_stop(config->counter);
@@ -343,7 +344,7 @@ static int move(const struct device *dev, uint32_t speed_msps, int32_t target_po
         return err;
     }
     uint32_t events = k_event_wait(&data->move_events, events_to_wait, false,
-                                   K_MSEC(1000 * (abs(steps) + 2) / speed_msps));
+                                   K_MSEC(100 + 1000 * (abs(steps * data->resolution)) / speed_msps));
     counter_stop(config->counter);
     if (events & MOVE_EVENT_OK) {
         LOG_DBG("Move ok");
