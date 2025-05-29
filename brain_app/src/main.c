@@ -261,6 +261,7 @@ struct point2 convert_point_for_team(enum pokprotocol_team color, struct point2 
 struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos, float offset)
 {
     if (color == POKTOCOL_TEAM_BLUE) {
+        pos.a += offset;
         return pos;
     }
 
@@ -272,6 +273,7 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos, f
 struct pos2 convert_pos_for_team_no_angle(enum pokprotocol_team color, struct pos2 pos, float offset)
 {
     if (color == POKTOCOL_TEAM_BLUE) {
+        pos.a += offset;
         return pos;
     }
 
