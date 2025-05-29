@@ -22,6 +22,18 @@ static int encode_and_send(const struct poktocol_msg *msg, bool confirmed) {
     return pokmac_send(pokmac_dev, tx_buffer, size, confirmed);
 }
 
+static int encode_and_send_with_retry(const struct poktocol_msg *msg) {
+    const int nb_retry = 5;
+    for (int i = 0; i < nb_retry; i++) {
+        int ret = encode_and_send(msg, true);
+        if (!ret) {
+            return 0;
+        }
+    }
+
+    LOG_ERR("Failed %d retry", nb_retry);
+    return -1;
+}
 
 int poklegscom_set_pos(const pos2_t *pos)
 {
@@ -33,7 +45,7 @@ int poklegscom_set_pos(const pos2_t *pos)
         },
         .data.legs_pos = *pos
     };
-    return encode_and_send(&msg, true);
+    return encode_and_send_with_retry(&msg);
 }
 
 int poklegscom_set_waypoints(const pos2_t *waypoints, size_t nb_waypoints) {
@@ -47,7 +59,7 @@ int poklegscom_set_waypoints(const pos2_t *waypoints, size_t nb_waypoints) {
             .nb_wps = nb_waypoints
         }
     };
-    return encode_and_send(&msg, true);
+    return encode_and_send_with_retry(&msg);
 };
 
 int poklegscom_get_pos(pos2_t *pos) {
@@ -69,7 +81,23 @@ int poklegscom_set_break(bool state)
         },
         .data.legs_break = state
     };
-    return encode_and_send(&msg, true);
+    return encode_and_send_with_retry(&msg);
+}
+
+int poklegscom_set_speed(float planar_vmax, float angular_vmax)
+{
+    struct poktocol_msg msg = {
+        .header = {
+            .cmd = POKTOCOL_CMD_TYPE_WRITE,
+            .type = POKTOCOL_DATA_TYPE_LEGS_VMAXS,
+        },
+        .data.nav_vmax = {
+            .planar_vmax = planar_vmax,
+            .angular_vmax = angular_vmax
+        }
+    };
+
+    return encode_and_send_with_retry(&msg);
 }
 
 static void poklegscom_rx_payload(uint8_t *payload_data, size_t payload_size) {

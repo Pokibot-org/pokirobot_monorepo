@@ -9,8 +9,11 @@ LOG_MODULE_REGISTER(com);
 static const struct device *pokmac_dev = DEVICE_DT_GET(DT_NODELABEL(pokmac_strat));
 pos2_t wps_buffer[128];
 uint8_t tx_buffer[64];
+uint8_t rx_buffer[1024];
+uint32_t rx_size = 0;
 
 static struct k_work publish_work;
+static struct k_work rx_work;
 static struct k_timer publish_timer;
 K_THREAD_STACK_DEFINE(com_wq_area, 1024);
 struct k_work_q com_wq;
@@ -41,7 +44,7 @@ void publish_work_handler(struct k_work *work)
     encode_and_send(&msg);
 }
 
-static void com_rx_payload(uint8_t *payload_data, size_t payload_size)
+static void rx_process_data(uint8_t *payload_data, size_t payload_size)
 {
     LOG_DBG("rx data of size %d", payload_size);
     struct poktocol_header msg;
@@ -85,10 +88,36 @@ static void com_rx_payload(uint8_t *payload_data, size_t payload_size)
             }
             control_set_brake(data.legs_break);
         } break;
+        case POKTOCOL_DATA_TYPE_LEGS_VMAXS: {
+            union poktocol_msg_data data;
+            if (poktocol_decode_data(payload_data, payload_size, &data)) {
+                LOG_ERR("Err decoding legs vmax");
+                return;
+            }
+            control_set_planar_vmax(data.nav_vmax.planar_vmax);
+            control_set_angular_vmax(data.nav_vmax.angular_vmax);
+        } break;
         default:
             LOG_ERR("Unsupported data type %d", msg.type);
             break;
     }
+}
+
+void rx_work_handler(struct k_work *work)
+{
+    rx_process_data(rx_buffer, rx_size);
+}
+
+static void com_rx_payload(uint8_t *payload_data, size_t payload_size)
+{
+    if (payload_size > sizeof(rx_buffer)) {
+        LOG_ERR("Too much data");
+        return;
+    }
+
+    memcpy(rx_buffer, payload_data, payload_size);
+    rx_size = payload_size;
+    k_work_submit_to_queue(&com_wq, &rx_work);
 }
 
 void publish_timer_expiry(struct k_timer *timer)
@@ -102,6 +131,7 @@ int com_start(void)
     k_work_queue_start(&com_wq, com_wq_area, K_THREAD_STACK_SIZEOF(com_wq_area), 12, NULL);
 
     k_work_init(&publish_work, publish_work_handler);
+    k_work_init(&rx_work, rx_work_handler);
     k_timer_init(&publish_timer, publish_timer_expiry, NULL);
 
     static struct pokmac_recv_callback clbk = {.cb = com_rx_payload};

@@ -490,6 +490,11 @@ void nav_register_obstacle(struct nav_obstacle *obs) {
     }
 };
 
+int nav_set_speed(float planar_vmax, float angular_vmax)
+{
+    return poklegscom_set_speed(planar_vmax, angular_vmax);
+}
+
 int nav_init(void)
 {
     static struct k_work_queue_config cfg = {

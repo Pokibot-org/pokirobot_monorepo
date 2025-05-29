@@ -23,13 +23,15 @@ LOG_MODULE_REGISTER(control);
 #define WHEEL_PERIMETER   358.142f
 #define MM_TO_USTEPS      100644.25490196078f
 
-#define PLANAR_VMAX   400.0f // 700 mm/s
-#define PLANAR_FACTOR (0.06f * PLANAR_VMAX)
-#define PLANAR_RAMP   (2.0f * PLANAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 2 seconds to reach vmax
+#define PLANAR_VMAX_DEFAULT   400.0f // 700 mm/s
+#define PLANAR_VMAX           (obj.planar_vmax)
+#define PLANAR_FACTOR         (0.06f * PLANAR_VMAX)
+#define PLANAR_RAMP           (2.0f * PLANAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 2 seconds to reach vmax
 
-#define ANGULAR_VMAX   (0.7f * M_PI) // 0.5 rotation/s
-#define ANGULAR_FACTOR (0.7f * ANGULAR_VMAX)
-#define ANGULAR_RAMP   (0.5f * ANGULAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 1 seconds to reach vmax
+#define ANGULAR_VMAX_DEFAULT   (0.7f * M_PI) // 0.5 rotation/s
+#define ANGULAR_VMAX           (obj.angular_vmax)
+#define ANGULAR_FACTOR         (0.7f * ANGULAR_VMAX)
+#define ANGULAR_RAMP           (0.5f * ANGULAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 1 seconds to reach vmax
 
 // normal
 // #define CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT  5.0f             // 5mm
@@ -62,6 +64,8 @@ struct control {
     float planar_target_sensivity;
     float angular_target_sensivity;
     float dir_angle;
+    float planar_vmax;
+    float angular_vmax;
     pos2_t pos;
     waypoints_t waypoints;
     const struct device *stepper0;
@@ -143,6 +147,20 @@ int control_set_waypoints(pos2_t *src, int n)
     return 0;
 exit_error:
     return -1;
+}
+
+int control_set_planar_vmax(float vmax)
+{
+    // TODO: mutex
+    obj.planar_vmax = vmax;
+    return 0;
+}
+
+int control_set_angular_vmax(float vmax)
+{
+    // TODO: mutex
+    obj.angular_vmax = vmax;
+    return 0;
 }
 
 vel2_t world_vel_from_delta(pos2_t delta, vel2_t prev_vel)
@@ -402,6 +420,8 @@ int control_start(void)
     obj.at_target = false;
     obj.planar_target_sensivity = CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT;
     obj.angular_target_sensivity = CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT;
+    obj.planar_vmax = PLANAR_VMAX_DEFAULT;
+    obj.angular_vmax = ANGULAR_VMAX_DEFAULT;
     obj.dir_angle = 0.0f;
     control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};

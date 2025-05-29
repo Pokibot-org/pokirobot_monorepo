@@ -337,6 +337,7 @@ int match(enum pokprotocol_team color)
     nav_wait_events(&nav_events);
 
     pokarm_deploy(true);
+    nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
 
     nav_go_to_direct(convert_pos_for_team(color, wp4, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -348,6 +349,7 @@ int match(enum pokprotocol_team color)
     nav_wait_events(&nav_events);
 
     pokarm_deploy(false);
+    nav_set_speed(500.0f, NAV_ANGULAR_VMAX_DEFAULT);
 
     nav_go_to_direct(convert_pos_for_team(color, wp0_wait_before_backstage, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);

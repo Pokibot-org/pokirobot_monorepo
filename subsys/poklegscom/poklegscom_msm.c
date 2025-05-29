@@ -61,6 +61,10 @@ int poklegscom_set_break(bool state)
     return 0;
 }
 
+int poklegscom_set_speed(float planar_vmax, float angular_vmax)
+{
+    return 0;
+}
 
 void pos_clbk(char *data, int len, void *user_data) {
     sscanf(data, "%f %f %f", &current_pos.x, &current_pos.y, &current_pos.a);

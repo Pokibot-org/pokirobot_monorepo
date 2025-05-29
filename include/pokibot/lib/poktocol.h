@@ -20,6 +20,7 @@ enum poktocol_data_types {
     POKTOCOL_DATA_TYPE_LEGS_BREAK,
     POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS,
     POKTOCOL_DATA_TYPE_LEGS_NAV_DATA,
+    POKTOCOL_DATA_TYPE_LEGS_VMAXS,
 };
 
 enum pokprotocol_tirette_status {
@@ -39,6 +40,11 @@ struct pokprotocol_nav_data {
     float dir;
 };
 
+struct pokprotocol_nav_vmax {
+    float planar_vmax;
+    float angular_vmax;
+};
+
 union poktocol_msg_data
 {
     uint8_t score;
@@ -48,6 +54,7 @@ union poktocol_msg_data
     float legs_dir;
     bool legs_break;
     struct pokprotocol_nav_data legs_nav_data;
+    struct pokprotocol_nav_vmax nav_vmax;
     struct {
         pos2_t *wps;
         size_t nb_wps;

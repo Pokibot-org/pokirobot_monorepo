@@ -15,9 +15,28 @@ static int pokprotocol_encode_dir(uint8_t *buffer, size_t buffer_size, const flo
     return size;
 }
 
+
+static int pokprotocol_encode_vmax(uint8_t *buffer, size_t buffer_size, const float *vmax)
+{
+    const size_t size = sizeof(float);
+    if (buffer_size < size) {
+        return -1;
+    }
+    // Maybe encode to Q4.12
+    memcpy(buffer, vmax, size);
+    return size;
+}
+
+
 static int pokprotocol_decode_dir(const uint8_t *buffer, float *dir)
 {
     memcpy(dir, buffer, sizeof(float));
+    return sizeof(float);
+}
+
+static int pokprotocol_decode_vmax(const uint8_t *buffer, float *vmax)
+{
+    memcpy(vmax, buffer, sizeof(float));
     return sizeof(float);
 }
 
@@ -109,6 +128,21 @@ int poktocol_encode(const struct poktocol_msg *msg, uint8_t *buffer, size_t buff
             }
             index += ret;
         } break;
+        case POKTOCOL_DATA_TYPE_LEGS_VMAXS:{
+            int ret;
+            ret = pokprotocol_encode_vmax(&buffer[index], buffer_size - index,
+                                          &msg->data.nav_vmax.planar_vmax);
+            if (ret < 0) {
+                return -1;
+            }
+            index += ret;
+            ret = pokprotocol_encode_vmax(&buffer[index], buffer_size - index,
+                                          &msg->data.nav_vmax.angular_vmax);
+            if (ret < 0) {
+                return -1;
+            }
+            index += ret;
+        } break;
         default:
             return -1; // Unknown data type
     }
@@ -178,6 +212,10 @@ int poktocol_decode_data(const uint8_t *buffer, size_t buffer_size, union poktoc
         case POKTOCOL_DATA_TYPE_LEGS_NAV_DATA: {
             index += pokprotocol_decode_pos(&buffer[index], &data->legs_nav_data.pos);
             index += pokprotocol_decode_dir(&buffer[index], &data->legs_nav_data.dir);
+        } break;
+        case POKTOCOL_DATA_TYPE_LEGS_VMAXS: {
+            index += pokprotocol_decode_vmax(&buffer[index], &data->nav_vmax.planar_vmax);
+            index += pokprotocol_decode_vmax(&buffer[index], &data->nav_vmax.angular_vmax);
         } break;
         default:
             return -1; // Unknown data type

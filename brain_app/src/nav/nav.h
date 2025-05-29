@@ -34,11 +34,14 @@ struct nav_obstacle {
     } data;
 };
 
+#define NAV_PLANAR_VMAX_DEFAULT    400.0f
+#define NAV_ANGULAR_VMAX_DEFAULT   (0.7f * M_PI)
 
 int nav_set_pos(const pos2_t pos);
 int nav_set_break(bool status);
 int nav_go_to(const pos2_t pos, k_timeout_t timeout);
 int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout);
+int nav_set_speed(float planar_vmax, float angular_vmax);
 void nav_cancel(void);
 void nav_wait_events(uint32_t *events);
 void nav_clear_obstacles(void);
