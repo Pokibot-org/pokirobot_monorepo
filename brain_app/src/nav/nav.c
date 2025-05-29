@@ -378,15 +378,15 @@ static void add_lidar_point_obstacle_to_grid(char *grid, point2_t point)
     astar_grid_flood_fill_circle(grid, cx, cy, r, ASTAR_NODE_FULL);
 }
 
-static bool is_obstacled_too_close(float angle, float distance)
+static bool is_obstacled_too_close(float angle_dist, float distance)
 {
     if (distance > LIDAR_STOP_DISTANCE_MAX) {
         return false;
     }
-    float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
-                  (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
+    float ratio = sqrtf(MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
+                       (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN));
     float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
-    return angle < test_angle / 2;
+    return angle_dist < test_angle / 2;
 }
 
 void log_lidar_point(const struct lidar_point *point)
