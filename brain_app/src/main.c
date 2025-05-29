@@ -295,10 +295,58 @@ void end_of_match_work_handler(struct k_work *work)
 }
 
 #if CONFIG_POKISTRAT_MAIN
+uint8_t score = 0;
+
+int start_second_target(enum pokprotocol_team color)
+{
+    const float consigne_a = - ROBOT_ARM_ANGLE_OFFSET;
+    uint32_t nav_events;
+
+    LOG_INF("SECOND TARGET");
+    const struct nav_obstacle_rectangle cor = static_obstacles[NAV_OBS_NAME_OBS_MIDDLE_RIGHT].data.rectangle;
+    const pos2_t wp2_1 = {
+        .x = cor.point.x + cor.width / 2 + ROBOT_RADIUS + 0.05f,
+        .y = cor.point.y,
+        .a = -M_PI/2
+    };
+
+    pos2_t wp2_2 = wp2_1;
+    wp2_2.y += ROBOT_RADIUS + 0.20f;
+    pos2_t wp2_3 = wp2_2;
+    wp2_3.x = cor.point.x;
+    pos2_t wp2_4 = CONVERT_POINT2_TO_POS2(cor.point, -M_PI/2);
+    pos2_t wp2_5 = CONVERT_POINT2_TO_POS2(start_zone.data.rectangle.point, -M_PI/2);
+    pos2_t wp2_6 = CONVERT_POINT2_TO_POS2(start_zone.data.rectangle.point, -M_PI/2);
+    wp2_6.y = 0.6f;
+
+    k_timeout_t per_task_timeout = K_FOREVER;
+
+    nav_go_to_direct(convert_pos_for_team(color, wp2_1, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team(color, wp2_2, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team(color, wp2_3, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+    pokarm_deploy(true);
+    nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
+    nav_go_to_direct(convert_pos_for_team(color, wp2_4, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team(color, wp2_5, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+    score += STRAT_STAND_SCORE_LV1;
+    pokuicom_send_score(score);
+    nav_go_to_direct(convert_pos_for_team(color, wp2_6, consigne_a), per_task_timeout);
+    nav_wait_events(&nav_events);
+
+    pokarm_deploy(false);
+    nav_set_speed(400.0f, NAV_ANGULAR_VMAX_DEFAULT);
+    LOG_INF("SECOND TARGET OK");
+    return 0;
+}
+
 int match(enum pokprotocol_team color)
 {
     uint32_t match_start_time_ms =  k_uptime_get_32();
-    uint8_t score = 0;
 
     pos2_t start_pos = CONVERT_POINT2_TO_POS2(convert_point_for_team(color, start_zone.data.rectangle.point), 0.0f);
     nav_set_pos(start_pos);
@@ -320,6 +368,9 @@ int match(enum pokprotocol_team color)
     nav_go_to_direct(convert_pos_for_team_no_angle(color, wp1, 0.0f), K_FOREVER);
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
+
+
+    LOG_INF("FIRST TARGET");
     nav_go_to_direct(convert_pos_for_team(color, wp2, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
     nav_go_to_direct(convert_pos_for_team(color, wp3, consigne_a), K_FOREVER);
@@ -336,11 +387,16 @@ int match(enum pokprotocol_team color)
 
     nav_go_to_direct(convert_pos_for_team(color, wp3, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
+    LOG_INF("FIRST TARGET OK");
 
     pokarm_deploy(false);
-    nav_set_speed(500.0f, NAV_ANGULAR_VMAX_DEFAULT);
+    nav_set_speed(400.0f, NAV_ANGULAR_VMAX_DEFAULT);
 
+    start_second_target(color);
+
+    LOG_INF("GO BACKSTAGE");
     const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2);
+    const pos2_t wpbs_0 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 };
     pos2_t wp0_wait_before_backstage = {
         .a = end_pos.a,
         .x = BOARD_MIN_X + 2.35f,
@@ -352,6 +408,9 @@ int match(enum pokprotocol_team color)
         .x = end_pos.x + 0.05f,
         .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2 - 0.05f
     };
+
+    nav_go_to_direct(convert_pos_for_team(color, wpbs_0, consigne_a), K_FOREVER);
+    nav_wait_events(&nav_events);
 
     nav_go_to_direct(convert_pos_for_team(color, wp0_wait_before_backstage, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -414,6 +473,8 @@ int main(void)
     pokarm_reset_pos();
     pokarm_pinch(false);
     pokarm_deploy(false);
+    score = 0;
+    pokuicom_send_score(score);
 
     LOG_INF("Init of all the actuators: OK");
 
