@@ -297,6 +297,14 @@ void end_of_match_work_handler(struct k_work *work)
 #if CONFIG_POKISTRAT_MAIN
 uint8_t score = 0;
 
+#define WAIT_EVENTS_AND_HANDLE(events)                                                             \
+    nav_wait_events(&events);                                                                      \
+    if (events & NAV_EVENT_CANCELED) {                                                             \
+        return -2;                                                                                 \
+    } else if (events & NAV_EVENT_TIMEOUT) {                                                       \
+        return -1;                                                                                 \
+    }
+
 int start_second_target(enum pokprotocol_team color)
 {
     const float consigne_a = - ROBOT_ARM_ANGLE_OFFSET;
@@ -319,14 +327,14 @@ int start_second_target(enum pokprotocol_team color)
     pos2_t wp2_6 = CONVERT_POINT2_TO_POS2(start_zone.data.rectangle.point, -M_PI/2);
     wp2_6.y = 0.6f;
 
-    k_timeout_t per_task_timeout = K_FOREVER;
+    k_timeout_t per_task_timeout = K_SECONDS(15);
 
     nav_go_to_direct(convert_pos_for_team(color, wp2_1, consigne_a), per_task_timeout);
-    nav_wait_events(&nav_events);
+    WAIT_EVENTS_AND_HANDLE(nav_events);
     nav_go_to_direct(convert_pos_for_team(color, wp2_2, consigne_a), per_task_timeout);
-    nav_wait_events(&nav_events);
+    WAIT_EVENTS_AND_HANDLE(nav_events);
     nav_go_to_direct(convert_pos_for_team(color, wp2_3, consigne_a), per_task_timeout);
-    nav_wait_events(&nav_events);
+    WAIT_EVENTS_AND_HANDLE(nav_events);
     pokarm_deploy(true);
     nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
     nav_go_to_direct(convert_pos_for_team(color, wp2_4, consigne_a), per_task_timeout);
