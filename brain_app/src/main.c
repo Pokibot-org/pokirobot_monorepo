@@ -295,6 +295,9 @@ void end_of_match_work_handler(struct k_work *work)
 #if CONFIG_POKISTRAT_MAIN
 int match(enum pokprotocol_team color)
 {
+    uint32_t match_start_time_ms =  k_uptime_get_32();
+    uint8_t score = 0;
+
     pos2_t start_pos = CONVERT_POINT2_TO_POS2(convert_point_for_team(color, start_zone.data.rectangle.point), 0.0f);
     nav_set_pos(start_pos);
     nav_set_break(false);
@@ -309,6 +312,17 @@ int match(enum pokprotocol_team color)
     };
 
     const pos2_t end_pos = CONVERT_POINT2_TO_POS2(end_zone.data.rectangle.point, -M_PI/2);
+    pos2_t wp0_wait_before_backstage = {
+        .a = end_pos.a,
+        .x = BOARD_MIN_X + 2.35f,
+        .y = 1.0f
+    };
+
+    pos2_t wp1_wait_before_backstage = {
+        .a = end_pos.a,
+        .x = end_pos.x - ROBOT_RADIUS / 2,
+        .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2
+    };
 
     const float consigne_a = - ROBOT_ARM_ANGLE_OFFSET;
 
@@ -326,11 +340,31 @@ int match(enum pokprotocol_team color)
 
     nav_go_to_direct(convert_pos_for_team(color, wp4, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
+
+    score += STRAT_STAND_SCORE_LV1;
+    pokuicom_send_score(score);
+
     nav_go_to_direct(convert_pos_for_team(color, wp3, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
 
-    nav_go_to(convert_pos_for_team(color, end_pos, consigne_a), K_FOREVER);
+    pokarm_deploy(false);
+
+    nav_go_to_direct(convert_pos_for_team(color, wp0_wait_before_backstage, consigne_a), K_FOREVER);
     nav_wait_events(&nav_events);
+
+    nav_go_to_direct(convert_pos_for_team(color, wp1_wait_before_backstage, consigne_a), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    // WAIT UNTIL 95s
+    while ((k_uptime_get_32() - match_start_time_ms) < (95 * 1000)) {
+        k_sleep(K_MSEC(100));
+    }
+
+    nav_go_to_direct(convert_pos_for_team(color, end_pos, consigne_a), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    score += STRAT_END_GAME_IN_BACKSTAGE_SCORE;
+    pokuicom_send_score(score);
 
     k_sleep(K_FOREVER);
     return 0;
@@ -385,7 +419,7 @@ int main(void)
 
     LOG_INF("Match started");
     k_work_schedule(&pomi_activate_work, K_SECONDS(85));
-    k_work_schedule(&end_of_match_work, K_SECONDS(109));
+    k_work_schedule(&end_of_match_work, K_SECONDS(100));
 
     match(color);
     return 0;
