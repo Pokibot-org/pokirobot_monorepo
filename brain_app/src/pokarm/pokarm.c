@@ -55,7 +55,7 @@ void pokarm_pinch(bool state)
     LOG_INF("Pokarm pinch %d", state);
 
     if (state) {
-        servomotor_set_angle(servo_left, full_closed_servo_pos_left + pinch_angle);
+        servomotor_set_angle(servo_left, full_closed_servo_pos_left + pinch_angle + DEG_TO_RAD(3));
         servomotor_set_angle(servo_right, full_closed_servo_pos_right - pinch_angle);
     } else {
         servomotor_set_angle(servo_left, full_closed_servo_pos_left + open_angle);
