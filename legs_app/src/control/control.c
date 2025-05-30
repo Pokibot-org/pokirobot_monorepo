@@ -12,7 +12,6 @@
 LOG_MODULE_REGISTER(control);
 
 #define CONTROL_MUTEX_TIMEOUT (K_MSEC(30))
-#define CONTROL_WAYPOINTS_N   256
 
 #define CONTROL_WAIT_OK             0
 #define CONTROL_WAIT_TIMEOUT_TARGET (-1)
@@ -23,15 +22,13 @@ LOG_MODULE_REGISTER(control);
 #define WHEEL_PERIMETER   358.142f
 #define MM_TO_USTEPS      100644.25490196078f
 
-#define PLANAR_VMAX_DEFAULT   400.0f // 700 mm/s
-#define PLANAR_VMAX           (obj.planar_vmax)
-#define PLANAR_FACTOR         (0.06f * PLANAR_VMAX)
-#define PLANAR_RAMP           (2.0f * PLANAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 2 seconds to reach vmax
+#define PLANAR_VMAX_DEFAULT                400.0f // 700 mm/s
+#define PLANAR_FACTOR(_planar_vmax)         (0.06f * (_planar_vmax))
+#define PLANAR_RAMP(_planar_vmax)           (2.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // 2 seconds to reach vmax
 
 #define ANGULAR_VMAX_DEFAULT   (0.7f * M_PI) // 0.5 rotation/s
-#define ANGULAR_VMAX           (obj.angular_vmax)
-#define ANGULAR_FACTOR         (0.7f * ANGULAR_VMAX)
-#define ANGULAR_RAMP           (0.5f * ANGULAR_VMAX * CONTROL_PERIOD_MS / 1000.0f) // 1 seconds to reach vmax
+#define ANGULAR_FACTOR(_angular_vmax)         (0.7f * (_angular_vmax))
+#define ANGULAR_RAMP(_angular_vmax)           (0.5f * (_angular_vmax) * CONTROL_PERIOD_MS / 1000.0f) // 1 seconds to reach vmax
 
 // normal
 // #define CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT  5.0f             // 5mm
@@ -44,102 +41,68 @@ LOG_MODULE_REGISTER(control);
 #define WP_DIST_BIAS                               60.0f
 #define WP_SENSITIVITY                             80.0f
 
-typedef struct waypoints {
-    pos2_t wps[CONTROL_WAYPOINTS_N];
-    int n;
-    int idx;
-    struct k_mutex lock;
-} waypoints_t;
 
-typedef struct omni3 {
-    float v1;
-    float v2;
-    float v3;
-} omni3_t;
-
-struct control {
-    bool brake;
-    bool ready;
-    bool at_target;
-    float planar_target_sensivity;
-    float angular_target_sensivity;
-    float dir_angle;
-    float planar_vmax;
-    float angular_vmax;
-    pos2_t pos;
-    waypoints_t waypoints;
-    const struct device *stepper0;
-    const struct device *stepper1;
-    const struct device *stepper2;
-    struct k_mutex access_mutex;
-};
-
-vel2_t world_vel_from_delta(pos2_t delta, vel2_t prev_vel);
-vel2_t world_vel_from_delta2(pos2_t delta1, pos2_t delta2, vel2_t prev_vel);
+vel2_t world_vel_from_delta(float planar_vmax, float angular_vmax, pos2_t delta, vel2_t prev_vel);
+vel2_t world_vel_from_delta2(float planar_vmax, float angular_vmax, pos2_t delta1, pos2_t delta2, vel2_t prev_vel);
 vel2_t local_vel_from_world(pos2_t pos, vel2_t world_vel);
 vel2_t world_vel_from_local(pos2_t pos, vel2_t local_vel);
 omni3_t omni_from_local_vel(vel2_t local_vel);
 vel2_t local_vel_from_omni(omni3_t omni);
 
-struct control obj = {
-    .stepper0 = DEVICE_DT_GET(DT_NODELABEL(stepper0)),
-    .stepper1 = DEVICE_DT_GET(DT_NODELABEL(stepper1)),
-    .stepper2 = DEVICE_DT_GET(DT_NODELABEL(stepper2)),
-};
 K_THREAD_STACK_DEFINE(control_thread_stack, 2048);
 struct k_thread control_thread;
 
-int control_set_pos(pos2_t pos)
+int control_set_pos(struct control *obj, pos2_t pos)
 {
-    if (k_mutex_lock(&obj.access_mutex, K_FOREVER)) {
+    if (k_mutex_lock(&obj->access_mutex, K_FOREVER)) {
         return -ENOLCK;
     }
-    obj.pos = pos;
-    k_mutex_unlock(&obj.access_mutex);
+    obj->pos = pos;
+    k_mutex_unlock(&obj->access_mutex);
     return 0;
 }
 
-int control_get_pos(pos2_t *pos)
+int control_get_pos(struct control *obj, pos2_t *pos)
 {
-    if (k_mutex_lock(&obj.access_mutex, K_FOREVER)) {
+    if (k_mutex_lock(&obj->access_mutex, K_FOREVER)) {
         return -ENOLCK;
     }
-    *pos = obj.pos;
-    k_mutex_unlock(&obj.access_mutex);
+    *pos = obj->pos;
+    k_mutex_unlock(&obj->access_mutex);
     return 0;
 }
 
-int control_get_dir(float *dir)
+int control_get_dir(struct control *obj,float *dir)
 {
-    *dir = obj.dir_angle;
+    *dir = obj->dir_angle;
     return 0;
 }
 
-static int control_get_pos_internal(pos2_t *pos)
+static int control_get_pos_internal(struct control *obj, pos2_t *pos)
 {
-    if (k_mutex_lock(&obj.access_mutex, K_MSEC(CONTROL_PERIOD_MS))) {
+    if (k_mutex_lock(&obj->access_mutex, K_MSEC(CONTROL_PERIOD_MS))) {
         LOG_ERR("Cant get pos internal");
         return -ENOLCK;
     }
-    *pos = obj.pos;
-    k_mutex_unlock(&obj.access_mutex);
+    *pos = obj->pos;
+    k_mutex_unlock(&obj->access_mutex);
     return 0;
 }
 
-int control_set_brake(bool brake)
+int control_set_brake(struct control *obj, bool brake)
 {
-    obj.brake = brake;
+    obj->brake = brake;
     return 0;
 }
 
-int control_set_waypoints(pos2_t *src, int n)
+int control_set_waypoints(struct control *obj, pos2_t *src, int n)
 {
-    int err = k_mutex_lock(&obj.waypoints.lock, CONTROL_MUTEX_TIMEOUT);
+    int err = k_mutex_lock(&obj->waypoints.lock, CONTROL_MUTEX_TIMEOUT);
     if (!err) {
-        obj.waypoints.idx = 0;
-        obj.waypoints.n = n;
-        memcpy(obj.waypoints.wps, src, n * sizeof(pos2_t));
-        k_mutex_unlock(&obj.waypoints.lock);
+        obj->waypoints.idx = 0;
+        obj->waypoints.n = n;
+        memcpy(obj->waypoints.wps, src, n * sizeof(pos2_t));
+        k_mutex_unlock(&obj->waypoints.lock);
     } else {
         LOG_ERR("could not lock waypoints mutex for write access");
         goto exit_error;
@@ -149,39 +112,39 @@ exit_error:
     return -1;
 }
 
-int control_set_planar_vmax(float vmax)
+int control_set_planar_vmax(struct control *obj, float vmax)
 {
     // TODO: mutex
-    obj.planar_vmax = vmax;
+    obj->planar_vmax = vmax;
     return 0;
 }
 
-int control_set_angular_vmax(float vmax)
+int control_set_angular_vmax(struct control *obj, float vmax)
 {
     // TODO: mutex
-    obj.angular_vmax = vmax;
+    obj->angular_vmax = vmax;
     return 0;
 }
 
-vel2_t world_vel_from_delta(pos2_t delta, vel2_t prev_vel)
+vel2_t world_vel_from_delta(float planar_vmax, float angular_vmax, pos2_t delta, vel2_t prev_vel)
 {
     // planar speed capping + acceleration ramp
-    float vx = PLANAR_FACTOR * NEG_SQRTF(delta.x);
-    float vy = PLANAR_FACTOR * NEG_SQRTF(delta.y);
+    float vx = PLANAR_FACTOR(planar_vmax) * NEG_SQRTF(delta.x);
+    float vy = PLANAR_FACTOR(planar_vmax) * NEG_SQRTF(delta.y);
     const float planar_speed = sqrtf(vx * vx + vy * vy);
     const float planar_speed_prev = sqrtf(prev_vel.vx * prev_vel.vx + prev_vel.vy * prev_vel.vy);
     const float planar_speed_clamped =
-        MIN(planar_speed, MIN(planar_speed_prev + PLANAR_RAMP, PLANAR_VMAX));
+        MIN(planar_speed, MIN(planar_speed_prev + PLANAR_RAMP(planar_vmax), planar_vmax));
     if (planar_speed > planar_speed_clamped) {
         const float planar_factor = planar_speed_clamped / planar_speed;
         vx *= planar_factor;
         vy *= planar_factor;
     }
     // angular speed capping + acceleration ramp
-    const float angular_speed_ramped = fabsf(prev_vel.w) + ANGULAR_RAMP;
+    const float angular_speed_ramped = fabsf(prev_vel.w) + ANGULAR_RAMP(angular_vmax);
     float w =
-        Z_CLAMP(ANGULAR_FACTOR * NEG_SQRTF(delta.a), MAX(-angular_speed_ramped, -ANGULAR_VMAX),
-                MIN(angular_speed_ramped, ANGULAR_VMAX));
+        Z_CLAMP(ANGULAR_FACTOR(angular_vmax) * NEG_SQRTF(delta.a), MAX(-angular_speed_ramped, -angular_vmax),
+                MIN(angular_speed_ramped, angular_vmax));
     // returning built vel
     vel2_t world_vel = {
         .vx = vx,
@@ -191,29 +154,29 @@ vel2_t world_vel_from_delta(pos2_t delta, vel2_t prev_vel)
     return world_vel;
 }
 
-vel2_t world_vel_from_delta2(pos2_t delta1, pos2_t delta2, vel2_t prev_vel)
+vel2_t world_vel_from_delta2(float planar_vmax, float angular_vmax, pos2_t delta1, pos2_t delta2, vel2_t prev_vel)
 {
     // compute biases
     float dist1 = sqrtf(delta1.x * delta1.x + delta1.y * delta1.y);
     float bias1 = MIN(dist1 / WP_DIST_BIAS, 1.0f);
     float bias2 = 1.0f - bias1;
     // planar speed capping + acceleration ramp
-    float vx = PLANAR_FACTOR * (bias1 * NEG_SQRTF(delta1.x) + bias2 * NEG_SQRTF(delta2.x));
-    float vy = PLANAR_FACTOR * (bias1 * NEG_SQRTF(delta1.y) + bias2 * NEG_SQRTF(delta2.y));
+    float vx = PLANAR_FACTOR(planar_vmax) * (bias1 * NEG_SQRTF(delta1.x) + bias2 * NEG_SQRTF(delta2.x));
+    float vy = PLANAR_FACTOR(planar_vmax) * (bias1 * NEG_SQRTF(delta1.y) + bias2 * NEG_SQRTF(delta2.y));
     const float planar_speed = sqrtf(vx * vx + vy * vy);
     const float planar_speed_prev = sqrtf(prev_vel.vx * prev_vel.vx + prev_vel.vy * prev_vel.vy);
     const float planar_speed_clamped =
-        MIN(planar_speed, MIN(planar_speed_prev + PLANAR_RAMP, PLANAR_VMAX));
+        MIN(planar_speed, MIN(planar_speed_prev + PLANAR_RAMP(planar_vmax), planar_vmax));
     if (planar_speed > planar_speed_clamped) {
         const float planar_factor = planar_speed_clamped / planar_speed;
         vx *= planar_factor;
         vy *= planar_factor;
     }
     // angular speed capping + acceleration ramp
-    const float angular_speed_ramped = fabsf(prev_vel.w) + ANGULAR_RAMP;
+    const float angular_speed_ramped = fabsf(prev_vel.w) + ANGULAR_RAMP(angular_vmax);
     float w =
-        Z_CLAMP(ANGULAR_FACTOR * NEG_SQRTF(delta1.a), MAX(-angular_speed_ramped, -ANGULAR_VMAX),
-                MIN(angular_speed_ramped, ANGULAR_VMAX));
+        Z_CLAMP(ANGULAR_FACTOR(angular_vmax) * NEG_SQRTF(delta1.a), MAX(-angular_speed_ramped, -angular_vmax),
+                MIN(angular_speed_ramped, angular_vmax));
     // returning built vel
     vel2_t world_vel = {
         .vx = vx,
@@ -264,17 +227,17 @@ omni3_t omni_from_local_vel(vel2_t local_vel)
     return omni3;
 }
 
-int control_task_wait_target(float planar_sensivity, float angular_sensivity,
+int control_task_wait_target(struct control *obj, float planar_sensivity, float angular_sensivity,
                              uint32_t timeout_target_ms, uint32_t timeout_brake_ms)
 {
     uint32_t target_timeout_cnt = 0;
     uint32_t brake_timeout_cnt = 0;
-    obj.planar_target_sensivity = planar_sensivity;
-    obj.angular_target_sensivity = angular_sensivity;
-    obj.at_target = false;
-    while (!obj.at_target) {
+    obj->planar_target_sensivity = planar_sensivity;
+    obj->angular_target_sensivity = angular_sensivity;
+    obj->at_target = false;
+    while (!obj->at_target) {
         target_timeout_cnt += 1;
-        brake_timeout_cnt = obj.brake ? brake_timeout_cnt + 1 : 0;
+        brake_timeout_cnt = obj->brake ? brake_timeout_cnt + 1 : 0;
         if (target_timeout_cnt > timeout_target_ms) {
             return CONTROL_WAIT_TIMEOUT_TARGET;
         }
@@ -288,6 +251,7 @@ int control_task_wait_target(float planar_sensivity, float angular_sensivity,
 
 static void control_task(void *arg0, void *arg1, void *arg2)
 {
+    struct control *obj = arg0;
     LOG_INF("control task init");
     pos2_t pos = {.x = 0.0f, .y = 0.0f, .a = 0.0f};
     vel2_t world_vel = {.vx = 0.0f, .vy = 0.0f, .w = 0.0f};
@@ -296,17 +260,17 @@ static void control_task(void *arg0, void *arg1, void *arg2)
     float wp_dist = -1.0f;
     float dist_prev = -1.0f;
 
-    pokstepper_enable(obj.stepper0, true);
-    pokstepper_enable(obj.stepper1, true);
-    pokstepper_enable(obj.stepper2, true);
+    pokstepper_enable(obj->stepper0, true);
+    pokstepper_enable(obj->stepper1, true);
+    pokstepper_enable(obj->stepper2, true);
 
     bool wp_init = false;
-    while (obj.ready) {
+    while (obj->ready) {
         bool skip_write = false;
         int n, idx;
         pos2_t wp1, wp2;
         // lock the waypoint structure
-        int err = k_mutex_lock(&obj.waypoints.lock, K_MSEC((uint64_t)CONTROL_PERIOD_MS));
+        int err = k_mutex_lock(&obj->waypoints.lock, K_MSEC((uint64_t)CONTROL_PERIOD_MS));
         if (err) {
             LOG_ERR("could not lock waypoints mutex for read access");
             skip_write = true;
@@ -317,13 +281,13 @@ static void control_task(void *arg0, void *arg1, void *arg2)
         // get next waypoints
         if (!skip_write) {
             wp_init = true;
-            n = obj.waypoints.n;
-            idx = obj.waypoints.idx;
-            wp1 = obj.waypoints.wps[MIN(idx, n - 1)];
-            wp2 = obj.waypoints.wps[MIN(idx + 1, n - 1)];
+            n = obj->waypoints.n;
+            idx = obj->waypoints.idx;
+            wp1 = obj->waypoints.wps[MIN(idx, n - 1)];
+            wp2 = obj->waypoints.wps[MIN(idx + 1, n - 1)];
         }
         // update pos
-        control_get_pos_internal(&pos);
+        control_get_pos_internal(obj, &pos);
         // control_get_motors_v(&motors_v);
         // local_vel = local_vel_from_omni(motors_v);
         // world_vel = world_vel_from_local(old_pos, local_vel);
@@ -339,18 +303,18 @@ static void control_task(void *arg0, void *arg1, void *arg2)
         wp_dist = vec2_abs((vec2_t){delta1.x, delta1.y});
         if (idx >= (n - 1) && wp_dist < CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT &&
             delta2.a < CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT) {
-            obj.at_target = true;
+            obj->at_target = true;
         } else {
-            obj.at_target = false;
+            obj->at_target = false;
         }
         // world_vel = world_vel_from_delta(delta1, world_vel);
-        world_vel = world_vel_from_delta2(delta1, delta2, world_vel);
+        world_vel = world_vel_from_delta2(obj->planar_vmax, obj->angular_vmax, delta1, delta2, world_vel);
         local_vel = local_vel_from_world(pos, world_vel);
         motors_v = omni_from_local_vel(local_vel);
-        obj.dir_angle = atan2f(local_vel.vy, local_vel.vx);
+        obj->dir_angle = atan2f(local_vel.vy, local_vel.vx);
 
         // brake if required
-        if (obj.brake) {
+        if (obj->brake) {
             world_vel = (vel2_t){.vx = 0.0f, .vy = 0.0f, .w = 0.0f};
             local_vel = (vel2_t){.vx = 0.0f, .vy = 0.0f, .w = 0.0f};
             motors_v = (omni3_t){.v1 = 0.0f, .v2 = 0.0f, .v3 = 0.0f};
@@ -363,23 +327,23 @@ static void control_task(void *arg0, void *arg1, void *arg2)
             if (idx < n && dist_prev >= 0.0f &&
                 ((wp_dist > dist_prev && wp_dist <= WP_SENSITIVITY) ||
                  wp_dist < CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT)) {
-                obj.waypoints.idx = MIN(obj.waypoints.idx + 1, obj.waypoints.n);
+                obj->waypoints.idx = MIN(obj->waypoints.idx + 1, obj->waypoints.n);
                 dist_prev = -1.0f;
-                LOG_DBG("idx: %d", obj.waypoints.idx);
+                LOG_DBG("idx: %d", obj->waypoints.idx);
             } else {
                 dist_prev = wp_dist;
             }
             // release mutex and commit transaction
-            k_mutex_unlock(&obj.waypoints.lock);
+            k_mutex_unlock(&obj->waypoints.lock);
         }
-        control_set_pos(pos);
+        control_set_pos(obj, pos);
 
-        pokstepper_set_speed(obj.stepper0, (int32_t)(motors_v.v1 * MM_TO_USTEPS / WHEEL_PERIMETER));
-        pokstepper_set_speed(obj.stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
-        pokstepper_set_speed(obj.stepper2, (int32_t)(motors_v.v3 * MM_TO_USTEPS / WHEEL_PERIMETER));
+        pokstepper_set_speed(obj->stepper0, (int32_t)(motors_v.v1 * MM_TO_USTEPS / WHEEL_PERIMETER));
+        pokstepper_set_speed(obj->stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
+        pokstepper_set_speed(obj->stepper2, (int32_t)(motors_v.v3 * MM_TO_USTEPS / WHEEL_PERIMETER));
     continue_nocommit:
         // sleep
-        LOG_DBG("idx: %d", obj.waypoints.idx);
+        LOG_DBG("idx: %d", obj->waypoints.idx);
         LOG_DBG("pos: %.2f %.2f %.2f", (double)pos.x, (double)pos.y, (double)pos.a);
         LOG_DBG("target: %.2f %.2f %.2f", (double)wp1.x, (double)wp1.y, (double)wp1.a);
         LOG_DBG("next: %.2f %.2f %.2f", (double)wp2.x, (double)wp2.y, (double)wp2.a);
@@ -390,190 +354,190 @@ static void control_task(void *arg0, void *arg1, void *arg2)
     LOG_INF("control task done");
 }
 
-int control_start(void)
+int control_start(struct control *obj)
 {
     int ret = 0;
-    if (k_mutex_init(&obj.access_mutex)) {
+    if (k_mutex_init(&obj->access_mutex)) {
         LOG_ERR("Mutex init error access mutex");
         return -ENODEV;
     }
 
-    if (k_mutex_init(&obj.waypoints.lock)) {
+    if (k_mutex_init(&obj->waypoints.lock)) {
         LOG_ERR("Mutex init error waypoints lock");
         return -ENODEV;
     }
 
-    if (!device_is_ready(obj.stepper0)) {
+    if (!device_is_ready(obj->stepper0)) {
         LOG_ERR("Device stepper0 is not ready");
         return -ENODEV;
     }
-    if (!device_is_ready(obj.stepper1)) {
+    if (!device_is_ready(obj->stepper1)) {
         LOG_ERR("Device stepper1 is not ready");
         return -ENODEV;
     }
-    if (!device_is_ready(obj.stepper2)) {
+    if (!device_is_ready(obj->stepper2)) {
         LOG_ERR("Device stepper2 is not ready");
         return -ENODEV;
     }
 
-    obj.brake = false;
-    obj.at_target = false;
-    obj.planar_target_sensivity = CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT;
-    obj.angular_target_sensivity = CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT;
-    obj.planar_vmax = PLANAR_VMAX_DEFAULT;
-    obj.angular_vmax = ANGULAR_VMAX_DEFAULT;
-    obj.dir_angle = 0.0f;
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
+    obj->brake = false;
+    obj->at_target = false;
+    obj->planar_target_sensivity = CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT;
+    obj->angular_target_sensivity = CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT;
+    obj->planar_vmax = PLANAR_VMAX_DEFAULT;
+    obj->angular_vmax = ANGULAR_VMAX_DEFAULT;
+    obj->dir_angle = 0.0f;
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_waypoints(&target, 1);
-    obj.ready = true;
+    control_set_waypoints(obj, &target, 1);
+    obj->ready = true;
 
     k_tid_t thread_id = k_thread_create(&control_thread, control_thread_stack,
                                         K_THREAD_STACK_SIZEOF(control_thread_stack), control_task,
-                                        NULL, NULL, NULL, 2, 0, K_NO_WAIT);
+                                        obj, NULL, NULL, 2, 0, K_NO_WAIT);
     k_thread_name_set(thread_id, "control");
     return ret;
 }
 
-void _test_motor_cmd()
+void _test_motor_cmd(struct control *obj)
 {
-    control_start();
+    control_start(obj);
     k_sleep(K_MSEC(1000));
     while (1) {
-        pokstepper_set_speed(obj.stepper0, 0);
-        pokstepper_set_speed(obj.stepper1, 0);
-        pokstepper_set_speed(obj.stepper2, 0);
+        pokstepper_set_speed(obj->stepper0, 0);
+        pokstepper_set_speed(obj->stepper1, 0);
+        pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj.stepper0, 10000);
-        pokstepper_set_speed(obj.stepper1, 20000);
-        pokstepper_set_speed(obj.stepper2, 40000);
+        pokstepper_set_speed(obj->stepper0, 10000);
+        pokstepper_set_speed(obj->stepper1, 20000);
+        pokstepper_set_speed(obj->stepper2, 40000);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj.stepper0, 0);
-        pokstepper_set_speed(obj.stepper1, 0);
-        pokstepper_set_speed(obj.stepper2, 0);
+        pokstepper_set_speed(obj->stepper0, 0);
+        pokstepper_set_speed(obj->stepper1, 0);
+        pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj.stepper0, 10000);
-        pokstepper_set_speed(obj.stepper1, 0);
-        pokstepper_set_speed(obj.stepper2, 0);
+        pokstepper_set_speed(obj->stepper0, 10000);
+        pokstepper_set_speed(obj->stepper1, 0);
+        pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj.stepper0, 0);
-        pokstepper_set_speed(obj.stepper1, 10000);
-        pokstepper_set_speed(obj.stepper2, 0);
+        pokstepper_set_speed(obj->stepper0, 0);
+        pokstepper_set_speed(obj->stepper1, 10000);
+        pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj.stepper0, 0);
-        pokstepper_set_speed(obj.stepper1, 0);
-        pokstepper_set_speed(obj.stepper2, 10000);
+        pokstepper_set_speed(obj->stepper0, 0);
+        pokstepper_set_speed(obj->stepper1, 0);
+        pokstepper_set_speed(obj->stepper2, 10000);
         k_sleep(K_MSEC(1000));
     }
 }
 
-void _test_target()
+void _test_target(struct control *obj)
 {
     LOG_INF("_test_target");
-    control_start();
+    control_start(obj);
     pos2_t target;
     while (1) {
         target = (pos2_t){100.0f, 100.0f, 1.0f * M_PI};
-        control_set_waypoints(&target, 1);
+        control_set_waypoints(obj, &target, 1);
         LOG_DBG("1");
         k_sleep(K_MSEC(5000));
         target = (pos2_t){0.0f, 0.0f, 0.0f * M_PI};
-        control_set_waypoints(&target, 1);
+        control_set_waypoints(obj, &target, 1);
         LOG_DBG("2");
         k_sleep(K_MSEC(5000));
         target = (pos2_t){100.0f, -100.0f, -2.0f * M_PI};
-        control_set_waypoints(&target, 1);
+        control_set_waypoints(obj, &target, 1);
         LOG_DBG("3");
         k_sleep(K_MSEC(5000));
     }
 }
 
-void _test_calibration_distance()
+void _test_calibration_distance(struct control *obj)
 {
     LOG_INF("_test_calibration");
-    control_start();
+    control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
-    control_set_waypoints(&target, 1);
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(obj, &target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     target = (pos2_t){0.0f, 3000.0f, 0.0f * M_PI};
-    control_set_waypoints(&target, 1);
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    control_set_waypoints(obj, &target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     k_sleep(K_MSEC(15000));
 }
 
-void _test_calibration_angle()
+void _test_calibration_angle(struct control *obj)
 {
     LOG_INF("_test_calibration");
-    control_start();
+    control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
-    control_set_waypoints(&target, 1);
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(obj, &target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     target = (pos2_t){0.0f, 0.0f, 20.0f * M_PI};
-    control_set_waypoints(&target, 1);
+    control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(15000));
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
 }
 
-void _test_calibration_mix()
+void _test_calibration_mix(struct control *obj)
 {
     LOG_INF("_test_calibration");
-    control_start();
+    control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
-    control_set_waypoints(&target, 1);
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(obj, &target, 1);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
     target = (pos2_t){0.0f, 0.0f, 1.0f * M_PI};
-    control_set_waypoints(&target, 1);
+    control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(5000));
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     target = (pos2_t){0.0f, 1000.0f, -1.0f * M_PI};
-    control_set_waypoints(&target, 1);
+    control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(5000));
-    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj.pos.x, (double)obj.pos.y, (double)obj.pos.a);
-    LOG_DBG("target: %.2f %.2f %.2f", (double)obj.waypoints.wps[0].x,
-            (double)obj.waypoints.wps[0].y, (double)obj.waypoints.wps[0].a);
+    LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
+    LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
+            (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
 }
 
-void _test_connerie()
+void _test_connerie(struct control *obj)
 {
     LOG_INF("_test_connerie");
-    control_start();
+    control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 100.0f};
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
-    control_set_waypoints(&target, 1);
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(15000));
-    obj.brake = true;
+    obj->brake = true;
 }
 
-void _test_drawing()
+void _test_drawing(struct control *obj)
 {
     LOG_INF("_test_drawing");
-    control_start();
+    control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos((pos2_t){0.0f, 0.0f, 0.0f});
-    control_set_waypoints(&target, 1);
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(1000));
 
     // start of drawing
@@ -693,6 +657,6 @@ void _test_drawing()
         LOG_DBG("p[%d]: %.2f %.2f %.2f", i, (double)draw_wps[i].x, (double)draw_wps[i].y,
                 (double)draw_wps[i].a);
     }
-    control_set_waypoints(draw_wps, draw_wps_len);
-    control_task_wait_target_default(100000.0f, 10.0f);
+    control_set_waypoints(obj, draw_wps, draw_wps_len);
+    control_task_wait_target_default(obj, 100000.0f, 10.0f);
 }
