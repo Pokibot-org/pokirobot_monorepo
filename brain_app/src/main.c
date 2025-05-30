@@ -455,6 +455,28 @@ void test_pomicontrol(void) {
     }
 }
 
+void calibrate(enum pokprotocol_team color)
+{
+    nav_obstacle_detection(false);
+    nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
+
+    uint32_t nav_events;
+    point2_t converted_start_point = convert_point_for_team(color, start_zone.data.rectangle.point);
+    point2_t start_point = {
+        .x = converted_start_point.x - start_zone.data.rectangle.width / 2 + ROBOT_DIST_TO_FLAT_SIZE,
+        .y = converted_start_point.y - start_zone.data.rectangle.height / 2 + ROBOT_RADIUS,
+    };
+    pos2_t start_pos = CONVERT_POINT2_TO_POS2(start_point, 0.0f);
+    nav_set_pos(start_pos);
+    k_sleep(K_MSEC(500));
+
+    nav_go_to_direct(CONVERT_POINT2_TO_POS2(converted_start_point, 0.0f), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    nav_set_speed(NAV_PLANAR_VMAX_DEFAULT, NAV_ANGULAR_VMAX_DEFAULT);
+    nav_obstacle_detection(true);
+}
+
 int main(void)
 {
     LOG_INF("Pokibot main start");
@@ -478,20 +500,23 @@ int main(void)
         k_sleep(K_MSEC(10));
     }
 
-    pokarm_reset_pos();
-    pokarm_pinch(false);
-    pokarm_deploy(false);
-    score = 0;
-    pokuicom_send_score(score);
-
-    LOG_INF("Init of all the actuators: OK");
-
     enum pokprotocol_team color;
     while (pokuicom_get_team_color(&color)) {
         pokuicom_request(POKTOCOL_DATA_TYPE_UI_TEAM);
         k_sleep(K_MSEC(10));
     }
     LOG_INF("Team: %s", color == POKTOCOL_TEAM_BLUE ? "blue" : "yellow");
+
+    pokarm_reset_pos();
+    pokarm_pinch(false);
+    pokarm_deploy(false);
+    score = 0;
+    pokuicom_send_score(score);
+    LOG_INF("Init of all the actuators: OK");
+
+    LOG_INF("Calibration");
+    calibrate(color);
+    LOG_INF("Calibration: OK");
 
     while (pokuicom_get_tirette_status() != POKTOCOL_TIRETTE_STATUS_UNPLUGGED) {
         pokuicom_request(POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS);

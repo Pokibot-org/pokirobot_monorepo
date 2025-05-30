@@ -269,6 +269,14 @@ int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout)
     return 0;
 }
 
+int nav_move_relative(const pos2_t pos, k_timeout_t timeout)
+{
+    pos2_t current_pos;
+    poklegscom_get_pos(&current_pos);
+    pos2_t target_pos = pos2_add(current_pos, pos);
+    return nav_go_to_direct(target_pos, timeout);
+}
+
 void nav_cancel(void)
 {
     nav_stop_all();
@@ -493,6 +501,15 @@ void nav_register_obstacle(struct nav_obstacle *obs) {
 int nav_set_speed(float planar_vmax, float angular_vmax)
 {
     return poklegscom_set_speed(planar_vmax, angular_vmax);
+}
+
+void nav_obstacle_detection(bool state)
+{
+    if (state) {
+        lidar_start(lidar_dev);
+    } else {
+        lidar_stop(lidar_dev);
+    }
 }
 
 int nav_init(void)
