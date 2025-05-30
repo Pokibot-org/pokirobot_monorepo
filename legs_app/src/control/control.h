@@ -22,6 +22,7 @@ struct control {
     bool brake;
     bool ready;
     bool at_target;
+    bool skip_pos_write;
     float planar_target_sensivity;
     float angular_target_sensivity;
     float dir_angle;
@@ -36,7 +37,7 @@ struct control {
 };
 
 int control_start(struct control *obj);
-int control_set_pos(struct control *obj, pos2_t pos);
+int control_set_pos(struct control *obj, pos2_t pos, bool force);
 int control_get_pos(struct control *obj, pos2_t *pos);
 int control_get_dir(struct control *obj, float *dir);
 int control_set_brake(struct control *obj, bool brake);

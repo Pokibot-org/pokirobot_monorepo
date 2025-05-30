@@ -52,12 +52,13 @@ vel2_t local_vel_from_omni(omni3_t omni);
 K_THREAD_STACK_DEFINE(control_thread_stack, 2048);
 struct k_thread control_thread;
 
-int control_set_pos(struct control *obj, pos2_t pos)
+int control_set_pos(struct control *obj, pos2_t pos, bool force)
 {
     if (k_mutex_lock(&obj->access_mutex, K_FOREVER)) {
         return -ENOLCK;
     }
     obj->pos = pos;
+    obj->skip_pos_write = force;
     k_mutex_unlock(&obj->access_mutex);
     return 0;
 }
@@ -336,7 +337,11 @@ static void control_task(void *arg0, void *arg1, void *arg2)
             // release mutex and commit transaction
             k_mutex_unlock(&obj->waypoints.lock);
         }
-        control_set_pos(obj, pos);
+        if (obj->skip_pos_write) {
+            obj->skip_pos_write = false;
+        } else {
+            control_set_pos(obj, pos, false);
+        }
 
         pokstepper_set_speed(obj->stepper0, (int32_t)(motors_v.v1 * MM_TO_USTEPS / WHEEL_PERIMETER));
         pokstepper_set_speed(obj->stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
@@ -382,12 +387,13 @@ int control_start(struct control *obj)
 
     obj->brake = false;
     obj->at_target = false;
+    obj->skip_pos_write = false;
     obj->planar_target_sensivity = CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT;
     obj->angular_target_sensivity = CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT;
     obj->planar_vmax = PLANAR_VMAX_DEFAULT;
     obj->angular_vmax = ANGULAR_VMAX_DEFAULT;
     obj->dir_angle = 0.0f;
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
     control_set_waypoints(obj, &target, 1);
     obj->ready = true;
@@ -458,7 +464,7 @@ void _test_calibration_distance(struct control *obj)
     control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     control_set_waypoints(obj, &target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
@@ -478,7 +484,7 @@ void _test_calibration_angle(struct control *obj)
     control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     control_set_waypoints(obj, &target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
@@ -498,7 +504,7 @@ void _test_calibration_mix(struct control *obj)
     control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     control_set_waypoints(obj, &target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
@@ -524,7 +530,7 @@ void _test_connerie(struct control *obj)
     control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 100.0f};
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(15000));
     obj->brake = true;
@@ -536,7 +542,7 @@ void _test_drawing(struct control *obj)
     control_start(obj);
     LOG_DBG("alive");
     pos2_t target = (pos2_t){0.0f, 0.0f, 0.0f};
-    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f});
+    control_set_pos(obj, (pos2_t){0.0f, 0.0f, 0.0f}, true);
     control_set_waypoints(obj, &target, 1);
     k_sleep(K_MSEC(1000));
 

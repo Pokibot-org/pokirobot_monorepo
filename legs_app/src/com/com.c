@@ -68,7 +68,7 @@ static void rx_process_data(uint8_t *payload_data, size_t payload_size)
             }
             data.legs_pos.x *= 1000;
             data.legs_pos.y *= 1000;
-            control_set_pos(control_obj, data.legs_pos);
+            control_set_pos(control_obj, data.legs_pos, true);
         } break;
         case POKTOCOL_DATA_TYPE_LEGS_WAYPOINTS: {
             union poktocol_msg_data data = {.waypoints.wps = wps_buffer};
