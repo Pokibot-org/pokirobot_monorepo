@@ -292,6 +292,7 @@ void end_of_match_work_handler(struct k_work *work)
 {
     nav_cancel();
     LOG_INF("Match is over");
+    k_sleep(K_FOREVER);
 }
 
 #if CONFIG_POKISTRAT_MAIN
@@ -413,8 +414,8 @@ int match(enum pokprotocol_team color)
 
     pos2_t wp1_wait_before_backstage = {
         .a = end_pos.a,
-        .x = end_pos.x + 0.05f,
-        .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2 - 0.05f
+        .x = end_pos.x - 0.05f,
+        .y = end_pos.y - ROBOT_RADIUS - end_zone.data.rectangle.height / 2 - 0.14f
     };
 
     nav_go_to_direct(convert_pos_for_team(color, wpbs_0, consigne_a), K_FOREVER);
