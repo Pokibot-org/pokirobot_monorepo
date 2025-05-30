@@ -49,7 +49,7 @@ static void rx_timeout_work_handler(struct k_work *work)
 {
    	struct k_work_delayable *delayable = k_work_delayable_from_work(work);
     struct pokmac_data *data = CONTAINER_OF(delayable, struct pokmac_data, rx_timeout_work);
-    LOG_DBG("Rx timeout");
+    LOG_WRN("Rx timeout");
     data->flush_rx = true;
 }
 

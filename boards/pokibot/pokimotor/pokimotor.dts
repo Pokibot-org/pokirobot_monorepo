@@ -153,7 +153,7 @@
 &lpuart1 {
 	pinctrl-0 = <&lpuart1_tx_pb11 &lpuart1_rx_pa3>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <230400>;
 	status = "okay";
     pokmac_strat: pokmac_strat {
 		compatible = "pokibot,pokmac";
