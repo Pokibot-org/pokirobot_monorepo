@@ -49,7 +49,7 @@ void pokarm_pinch(bool state)
 {
     const float full_closed_servo_pos_left = DEG_TO_RAD(0);
     const float full_closed_servo_pos_right = DEG_TO_RAD(180);
-    float open_angle = DEG_TO_RAD(25);
+    float open_angle = DEG_TO_RAD(28);
     float pinch_angle = DEG_TO_RAD(19);
 
     LOG_INF("Pokarm pinch %d", state);
