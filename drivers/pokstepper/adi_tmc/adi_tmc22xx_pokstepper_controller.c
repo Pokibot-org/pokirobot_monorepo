@@ -147,6 +147,13 @@ static int tmc22xx_set_ihold_irun(const struct device *dev, uint32_t ihold, uint
     return ret;
 }
 
+static int tmc22xx_set_tpowerdown(const struct device *dev, uint8_t tpowerdown)
+{
+    int ret = 0;
+    ret = tmc22xx_wrequest_confirmed(dev, TMC2209_REG_TPOWER_DOWN, tpowerdown);
+    return ret;
+}
+
 // static int tmc22xx_set_freewheel_conf(const struct device *dev, uint8_t freewheel)
 // {
 //     uint32_t reg;
@@ -203,6 +210,7 @@ static int tmc22xx_pokstepper_set_speed(const struct device *dev, int32_t speed)
     if (speed < TMC2209_VACTUAL_MIN || speed > TMC2209_VACTUAL_MAX) {
         return TMC2209_ERR_SPEED_RANGE;
     }
+    LOG_DBG("speed %d", speed);
     tmc22xx_wrequest(dev, TMC2209_REG_VACTUAL, speed);
     data->has_known_pos = false;
     return 0;
@@ -386,18 +394,46 @@ static int tmc22xx_pokstepper_init(const struct device *dev)
 
     data->self = dev;
 
+    if (gpio_is_ready_dt(&config->step_pin)) {
+        LOG_DBG("Forcing step pin to low");
+        ret = gpio_pin_configure_dt(&config->step_pin, GPIO_OUTPUT_LOW);
+        if (ret < 0) {
+            LOG_ERR("Failed to configure step pin: %d", ret);
+            return ret;
+        }
+    }
+
+    if (gpio_is_ready_dt(&config->dir_pin)) {
+        LOG_DBG("Forcing dir pin to low");
+        ret = gpio_pin_configure_dt(&config->dir_pin, GPIO_OUTPUT_LOW);
+        if (ret < 0) {
+            LOG_ERR("Failed to configure dir pin: %d", ret);
+            return ret;
+        }
+    }
+
     if (gpio_is_ready_dt(&config->en)) {
-        gpio_pin_set_dt(&config->en, 1);
+        ret = gpio_pin_configure_dt(&config->en, GPIO_OUTPUT_HIGH);
+        if (ret < 0) {
+            LOG_ERR("Failed to configure en pin: %d", ret);
+            return ret;
+        }
     }
 
     if (gpio_is_ready_dt(&config->nstdby)) {
-        gpio_pin_set_dt(&config->nstdby, 1);
+        ret = gpio_pin_configure_dt(&config->nstdby, GPIO_OUTPUT_HIGH);
+        if (ret < 0) {
+            LOG_ERR("Failed to configure nstdby pin: %d", ret);
+            return ret;
+        }
     }
 
     ret |= tmc22xx_set_senddelay(dev, 2);
     ret |= tmc22xx_set_mres(dev, RESOLUTION_TO_MRES(data->resolution));
     ret |= tmc22xx_set_ihold_irun(dev, data->ihold, data->irun, data->iholddelay);
+    ret |= tmc22xx_set_tpowerdown(dev, 10);
     ret |= tmc22xx_pokstepper_set_speed(dev, 0);
+
     if (ret) {
         LOG_ERR("tmc conf incorrect");
     }
