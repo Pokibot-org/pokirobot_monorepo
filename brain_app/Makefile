@@ -8,6 +8,9 @@ help: # show help for each of the Makefile recipes.
 build: # build target
 	west build -b interco_weact_h743 . --build-dir ../build
 
+build-debug: # build target with debug flags
+	west build -b interco_weact_h743 . --build-dir ../build -- -DOVERLAY_CONFIG="debug.conf"
+
 rebuild: # rebuild target
 	west build -b interco_weact_h743 . --pristine --build-dir ../build
 
