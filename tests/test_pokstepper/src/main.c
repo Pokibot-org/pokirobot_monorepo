@@ -21,7 +21,7 @@ int main(void)
 
     int32_t speed = 10;
     int sleep_time = 1;
-    for (int i=0; i < 4; i ++) {
+    for (int i=0; i < 5; i ++) {
         LOG_INF("Set speed +%d", speed);
         pokstepper_set_speed(stepper0, speed);
         k_sleep(K_SECONDS(sleep_time));
@@ -32,6 +32,9 @@ int main(void)
     }
     LOG_INF("Set speed 0");
     pokstepper_set_speed(stepper0, 0);
+    LOG_INF("CHECK LOW POWER MODE, as speed == 0 current must be at hold level");
+    k_sleep(K_SECONDS(10));
+    LOG_INF("END CHECK LOW POWER MODE");
     pokstepper_enable(stepper0, false);
     k_sleep(K_FOREVER);
     return 0;
