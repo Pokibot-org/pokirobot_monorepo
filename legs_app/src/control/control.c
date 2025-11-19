@@ -407,32 +407,31 @@ int control_start(struct control *obj)
 
 void _test_motor_cmd(struct control *obj)
 {
-    control_start(obj);
     k_sleep(K_MSEC(1000));
     while (1) {
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj->stepper0, 10000);
-        pokstepper_set_speed(obj->stepper1, 20000);
-        pokstepper_set_speed(obj->stepper2, 40000);
+        pokstepper_set_speed(obj->stepper0, 100000);
+        pokstepper_set_speed(obj->stepper1, 150000);
+        pokstepper_set_speed(obj->stepper2, 200000);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj->stepper0, 10000);
+        pokstepper_set_speed(obj->stepper0, 100000);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
-        pokstepper_set_speed(obj->stepper1, 10000);
+        pokstepper_set_speed(obj->stepper1, 100000);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
-        pokstepper_set_speed(obj->stepper2, 10000);
+        pokstepper_set_speed(obj->stepper2, 100000);
         k_sleep(K_MSEC(1000));
     }
 }
