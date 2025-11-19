@@ -97,7 +97,7 @@
 
 			address = <0>;
 			micro-step-res = <256>;
-			ihold = <5>;
+			ihold = <10>;
 			irun = <31>;
 			iholddelay = <10>;
 			reverse-shaft;
@@ -113,7 +113,7 @@
 			/* common stepper controller settings */
 			micro-step-res = <256>;
 			/* tmc specific */
-			ihold = <5>;
+			ihold = <10>;
 			irun = <31>;
 			iholddelay = <10>;
 			reverse-shaft;
@@ -128,7 +128,7 @@
 			/* common stepper controller settings */
 			micro-step-res = <256>;
 			/* tmc specific */
-			ihold = <5>;
+			ihold = <10>;
 			irun = <31>;
 			iholddelay = <10>;
 			reverse-shaft;
