@@ -92,6 +92,9 @@
 		stepper0:stepper0 {
 			compatible = "adi,tmc2209-pokibot";
 			status = "okay";
+			step-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+			dir-gpios = <&gpioc 9 GPIO_ACTIVE_HIGH>;
+
 			address = <0>;
 			micro-step-res = <256>;
 			ihold = <5>;
@@ -103,8 +106,10 @@
 		stepper1:stepper1 {
 			compatible = "adi,tmc2209-pokibot";
 			status = "okay";
-			address = <1>;
+			step-gpios = <&gpiob 14 GPIO_ACTIVE_HIGH>;
+			dir-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
 
+			address = <1>;
 			/* common stepper controller settings */
 			micro-step-res = <256>;
 			/* tmc specific */
@@ -116,8 +121,10 @@
 		stepper2:stepper2 {
 			compatible = "adi,tmc2209-pokibot";
 			status = "okay";
-			address = <2>;
+			step-gpios = <&gpioa 10 GPIO_ACTIVE_HIGH>;
+			dir-gpios = <&gpioa 11 GPIO_ACTIVE_HIGH>;
 
+			address = <2>;
 			/* common stepper controller settings */
 			micro-step-res = <256>;
 			/* tmc specific */
