@@ -54,6 +54,7 @@ int control_task_wait_target(struct control *obj, float planar_sensivity, float 
 
 void _test_motor_cmd(struct control *obj);
 void _test_target(struct control *obj);
+void _test_square(struct control *obj);
 void _test_calibration_distance(struct control *obj);
 void _test_calibration_angle(struct control *obj);
 void _test_calibration_mix(struct control *obj);

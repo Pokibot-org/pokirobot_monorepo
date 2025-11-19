@@ -457,6 +457,22 @@ void _test_target(struct control *obj)
     }
 }
 
+void _test_square(struct control *control_obj) {
+    LOG_INF("_test_square");
+    control_start(control_obj);
+
+    pos2_t pos[] = {
+        (pos2_t){.x = 1000.0f, .y=0.0f, .a = 0.0f},
+        (pos2_t){.x = 1000.0f, .y=1000.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y=1000.0f, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y=0.0f, .a = 0.0f},
+    };
+    pos2_t start_pos = {.x = 0.0f, .y=0.0f, .a = 0.0f};
+    control_set_pos(control_obj, start_pos, false);
+    control_set_brake(control_obj, false);
+    control_set_waypoints(control_obj, pos, ARRAY_SIZE(pos));
+}
+
 void _test_calibration_distance(struct control *obj)
 {
     LOG_INF("_test_calibration");

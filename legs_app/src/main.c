@@ -21,6 +21,7 @@ int main(void)
     com_start(&control_obj);
     gpio_pin_configure_dt(&led1, GPIO_OUTPUT_HIGH);
 
+    // _test_square(&control_obj);
     // _test_motor_cmd(&control_obj);
     // _test_calibration_angle(&control_obj);
     return 0;
