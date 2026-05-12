@@ -9,6 +9,7 @@
 #include <st/h7/stm32h743vitx-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <zephyr/dt-bindings/clock/stm32h7_clock.h>
 
 / {
 	model = "interco_weact_h743";
@@ -22,6 +23,7 @@
         pokibot,poklegscom = &pokmac_legs;
         zephyr,console = &usart2;
         zephyr,shell-uart = &usart2;
+		zephyr,canbus = &fdcan1;
 	};
 
 	leds {
@@ -198,6 +200,16 @@
 	status = "okay";
 };
 
+&pll2 {
+	div-m = <4>;
+	mul-n = <120>;
+	div-p = <2>;
+	div-q = <3>; /* gives 80MHz to the FDCAN */
+	div-r = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
 &rcc {
 	clocks = <&pll>;
 	clock-frequency = <DT_FREQ_M(240)>;
@@ -317,6 +329,13 @@ zephyr_camera_dvp: &dcmi {
 
 // POKIBOT
 
+&fdcan1 {
+	clocks = <&rcc STM32_CLOCK(APB1_2, 8U)>, <&rcc STM32_SRC_PLL2_Q FDCAN_SEL(2)>;
+	pinctrl-0 = <&fdcan1_rx_pa11 &fdcan1_tx_pa12>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
 &usart1 {
     status = "okay";
     pinctrl-0 = <&usart1_tx_pb14 &usart1_rx_pb15>;
@@ -347,13 +366,13 @@ zephyr_camera_dvp: &dcmi {
 };
 
 &uart4 {
-    status = "okay";
+    status = "disabled";
     pinctrl-0 = <&uart4_tx_pa12 &uart4_rx_pa11>;
     pinctrl-names = "default";
     current-speed = <230400>;
     pokmac_legs: pokmac_legs {
         compatible = "pokibot,pokmac";
-        status = "okay";
+        status = "disabled";
     };
 };
 

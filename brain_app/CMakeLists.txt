@@ -8,6 +8,7 @@ target_include_directories(app PRIVATE src)
 target_sources(app PRIVATE
     src/main.c
     src/nav/nav.c
+    src/control/control.c
     src/pokarm/pokarm.c
     src/pomicontrol/pomicontrol.c
     src/astar-jps/IndexPriorityQueue.c
