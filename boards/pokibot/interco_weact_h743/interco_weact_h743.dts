@@ -153,6 +153,27 @@
 		mainlidar = &lidar;
 	};
 
+	stepper0: stepper0 {
+		compatible = "pokibot,mks-pokstepper";
+		can-device = <&fdcan1>;
+		motor-id = <0x0A>;
+		status = "okay";
+	};
+
+	stepper1: stepper1 {
+		compatible = "pokibot,mks-pokstepper";
+		can-device = <&fdcan1>;
+		motor-id = <0x0B>;
+		status = "okay";
+	};
+
+	stepper2: stepper2 {
+		compatible = "pokibot,mks-pokstepper";
+		can-device = <&fdcan1>;
+		motor-id = <0x0C>;
+		status = "okay";
+	};
+
 	dcmi_camera_connector: connector_dcmi_camera {
 		compatible = "weact,dcmi-camera-connector";
 		#gpio-cells = <2>;

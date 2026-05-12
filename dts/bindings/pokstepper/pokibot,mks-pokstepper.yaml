@@ -1,0 +1,16 @@
+description: MKS ServoCAN stepper motor driver
+
+compatible: "pokibot,mks-pokstepper"
+
+include: base.yaml
+
+properties:
+  can-device:
+    type: phandle
+    required: true
+    description: Reference to the CAN device (e.g., fdcan1)
+    
+  motor-id:
+    type: int
+    required: true
+    description: CAN identifier/address for this motor (0x000-0x7FF)

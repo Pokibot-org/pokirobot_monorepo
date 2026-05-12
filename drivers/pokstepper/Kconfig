@@ -22,6 +22,13 @@ config POKSTEPPER_POKIBOT_EMPTY_POKSTEPPER
 	help
 	  Empty stepper driver.
 
+config POKSTEPPER_POKIBOT_MKS_POKSTEPPER
+	bool "Activate mks pokibot flavored stepper driver"
+	depends on DT_HAS_POKIBOT_MKS_POKSTEPPER_ENABLED
+	default y
+	help
+	  Mks stepper driver.
+
 comment "Stepper Drivers pokibot flavored"
 
 # zephyr-keep-sorted-start
