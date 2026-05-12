@@ -34,7 +34,6 @@ struct mks_pokstepper_config {
 
 struct mks_pokstepper_data {
     const struct device *can_dev;
-    uint32_t motor_id;
     int32_t current_position;
     bool motor_enabled;
 };
@@ -207,8 +206,6 @@ static int mks_pokstepper_init(const struct device *dev)
         return -ENODEV;
     }
 
-    /* Store motor ID */
-    data->motor_id = config->motor_id;
     data->current_position = 0;
     data->motor_enabled = false;
 
