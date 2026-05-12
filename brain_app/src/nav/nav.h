@@ -38,7 +38,7 @@ struct nav_obstacle {
 #define NAV_ANGULAR_VMAX_DEFAULT   (0.7f * M_PI)
 
 int nav_set_pos(const pos2_t pos);
-int nav_set_break(bool status);
+int nav_set_brake(bool status);
 int nav_go_to(const pos2_t pos, k_timeout_t timeout);
 int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout);
 int nav_move_relative(const pos2_t pos, k_timeout_t timeout);

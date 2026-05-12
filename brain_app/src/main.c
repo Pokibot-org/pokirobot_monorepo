@@ -6,6 +6,7 @@
 #include "pomicontrol/pomicontrol.h"
 #include "pokdefs.h"
 #include "pokarm/pokarm.h"
+#include "control/control.h"
 
 LOG_MODULE_REGISTER(main);
 
@@ -359,7 +360,7 @@ int match(enum pokprotocol_team color)
 
     pos2_t start_pos = CONVERT_POINT2_TO_POS2(convert_point_for_team(color, start_zone.data.rectangle.point), 0.0f);
     nav_set_pos(start_pos);
-    nav_set_break(false);
+    nav_set_brake(false);
 
     const pos2_t wp1 = {.x = start_zone.data.rectangle.point.x, .y = 0.6f, .a = 0.0f };
     const pos2_t wp2 = {.x = BOARD_MIN_X + 2.225f, .y = 0.6f, .a = -M_PI/2 };

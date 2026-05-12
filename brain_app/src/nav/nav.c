@@ -20,6 +20,13 @@ enum nav_mode {
     NAV_MODE_WITH_PATHFINDING
 };
 
+static struct control control_obj = {
+    .stepper0 = DEVICE_DT_GET(DT_NODELABEL(stepper0)),
+    .stepper1 = DEVICE_DT_GET(DT_NODELABEL(stepper1)),
+    .stepper2 = DEVICE_DT_GET(DT_NODELABEL(stepper2)),
+};
+
+
 enum nav_mode current_mode = NAV_MODE_DIRECT;
 
 const struct device *lidar_dev = DEVICE_DT_GET(DT_ALIAS(mainlidar));
@@ -129,7 +136,7 @@ static void astar_grid_flood_fill_rectangle_with_margin(char *grid, int cx, int 
 
 static void log_astar_grid(char *current_grid, int start, int end) {
     pos2_t robot_pos;
-    control_get_pos(&robot_pos);
+    control_get_pos(&control_obj, &robot_pos);
     char line[GRID_SIZE_X * 2 + 1];
     memset(line, ' ', sizeof(line));
     line[GRID_SIZE_X * 2] = '\0';
@@ -153,12 +160,12 @@ static void log_astar_grid(char *current_grid, int start, int end) {
 
 int nav_set_pos(const pos2_t pos)
 {
-    return control_set_pos(&pos);
+    return control_set_pos(&control_obj, pos, true);
 }
 
-int nav_set_break(bool status)
+int nav_set_brake(bool status)
 {
-    return control_set_break(status);
+    return control_set_brake(&control_obj, status);
 }
 
 static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, const pos2_t *target_pos)
@@ -188,7 +195,7 @@ static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, con
         if (indexes) {
             k_free(indexes);
         }
-        control_set_waypoints(target_pos, 1);
+        control_set_waypoints(&control_obj, target_pos, 1);
         return 0;
     }
     pos2_t *wps = k_malloc(sizeof(pos2_t) * sol_length);
@@ -208,7 +215,7 @@ static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, con
     k_free(indexes);
     LOG_INF("First wp: {.x=%0.3f, .y=%0.3f}", (double)wps[0].x, (double)wps[0].y);
     wps[sol_length - 1] = *target_pos;
-    control_set_waypoints(wps, sol_length);
+    control_set_waypoints(&control_obj, wps, sol_length);
     k_free(wps);
     LOG_INF("go_to_with_pathfinding in %dms", k_uptime_get_32() - start_time);
     return 0;
@@ -217,7 +224,7 @@ static int go_to_with_pathfinding(char* astar_grid, const pos2_t *start_pos, con
 static int go_to_with_pathfinding_easy(const pos2_t target_pos)
 {
     pos2_t robot_pos;
-    control_get_pos(&robot_pos);
+    control_get_pos(&control_obj, &robot_pos);
     int start = astar_getIndexByWidth(GRID_SIZE_X, BOARD_TO_ASTAR_GRID_X(robot_pos.x),
                                       BOARD_TO_ASTAR_GRID_Y(robot_pos.y));
     memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
@@ -243,7 +250,7 @@ int nav_go_to(const pos2_t pos, k_timeout_t timeout)
     had_a_target_pos = true;
     current_mode = NAV_MODE_WITH_PATHFINDING;
     if (!current_obstacle_detected_state) {
-        control_set_break(0);
+        control_set_brake(&control_obj, 0);
     }
     go_to_with_pathfinding_easy(pos);
     k_work_schedule_for_queue(&nav_workq, &recompute_path_work, K_MSEC(1000));
@@ -261,9 +268,9 @@ int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout)
     had_a_target_pos = true;
     current_mode = NAV_MODE_DIRECT;
     if (!current_obstacle_detected_state) {
-        control_set_break(0);
+        control_set_brake(&control_obj, 0);
     }
-    control_set_waypoints(&pos, 1);
+    control_set_waypoints(&control_obj, &pos, 1);
     k_work_schedule_for_queue(&nav_workq, &check_target_reached_work, K_NO_WAIT);
     k_work_schedule_for_queue(&nav_workq, &timeout_work, timeout);
     return 0;
@@ -272,7 +279,7 @@ int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout)
 int nav_move_relative(const pos2_t pos, k_timeout_t timeout)
 {
     pos2_t current_pos;
-    control_get_pos(&current_pos);
+    control_get_pos(&control_obj, &current_pos);
     pos2_t target_pos = pos2_add(current_pos, pos);
     return nav_go_to_direct(target_pos, timeout);
 }
@@ -280,7 +287,7 @@ int nav_move_relative(const pos2_t pos, k_timeout_t timeout)
 void nav_cancel(void)
 {
     nav_stop_all();
-    control_set_break(1);
+    control_set_brake(&control_obj, 1);
     k_event_set(&nav_events, NAV_EVENT_CANCELED);
 }
 
@@ -292,7 +299,7 @@ void nav_wait_events(uint32_t *events)
 static void check_target_reached_work_handler(struct k_work *work)
 {
     pos2_t current_pos;
-    control_get_pos(&current_pos);
+    control_get_pos(&control_obj, &current_pos);
     pos2_t diff = pos2_abs(pos2_diff(current_pos, target_pos));
     if (POS2_COMPARE(diff, <, sensivity)) {
         LOG_INF("Target reached");
@@ -311,7 +318,7 @@ static void recompute_path_work_handler(struct k_work *work)
     pos2_t robot_pos;
     int retry_counter = nb_try;
     while (retry_counter) {
-        control_get_pos(&robot_pos);
+        control_get_pos(&control_obj, &robot_pos);
         memcpy(in_use_astar_grid, astar_grids[current_astar_grid], sizeof(in_use_astar_grid));
         int clearance_size = nb_try - retry_counter;
         LOG_INF("Recompute path with clearance size %d", clearance_size);
@@ -335,13 +342,13 @@ static void timeout_work_handler(struct k_work *work)
 void obstacle_detection_event_handler(bool obstacle_detected) {
     if (obstacle_detected) {
         LOG_INF("Obstacle detected");
-        control_set_break(1);
+        control_set_brake(&control_obj, 1);
         if (current_mode == NAV_MODE_WITH_PATHFINDING) {
             k_work_reschedule_for_queue(&nav_workq, &recompute_path_work, K_NO_WAIT);
         }
     } else {
         LOG_INF("No obstacle detected");
-        control_set_break(0);
+        control_set_brake(&control_obj, 0);
     }
 }
 
@@ -422,8 +429,8 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     // log_lidar_lp_points(points, nb_points);
     float robot_dir;
     pos2_t robot_pos;
-    control_get_dir(&robot_dir);
-    control_get_pos(&robot_pos);
+    control_get_dir(&control_obj, &robot_dir);
+    control_get_pos(&control_obj, &robot_pos);
 
     int next_astar_grid = (current_astar_grid + 1) % 2;
     char *grid = astar_grids[current_astar_grid];
@@ -500,7 +507,8 @@ void nav_register_obstacle(struct nav_obstacle *obs) {
 
 int nav_set_speed(float planar_vmax, float angular_vmax)
 {
-    return control_set_speed(planar_vmax, angular_vmax);
+    return 0;
+    // return control_set_speed(&control_obj, planar_vmax, angular_vmax);
 }
 
 void nav_obstacle_detection(bool state)
@@ -514,6 +522,8 @@ void nav_obstacle_detection(bool state)
 
 int nav_init(void)
 {
+    control_start(&control_obj);
+
     static struct k_work_queue_config cfg = {
         .name = "nav_workq",
     };
@@ -521,7 +531,7 @@ int nav_init(void)
     memset(astar_grids, ASTAR_NODE_EMPTY, sizeof(astar_grids));
     nav_clear_obstacles();
 
-    control_set_break(1);
+    control_set_brake(&control_obj, 1);
     k_work_queue_start(&nav_workq, nav_workq_stack, K_THREAD_STACK_SIZEOF(nav_workq_stack), 8,
                        &cfg);
     static struct lidar_callback lidar_clbk = {
