@@ -20,3 +20,6 @@ if (CONFIG_MQTT_SIM_MESSENGER)
     src/const_publisher.c
 )
 endif()
+
+# Quick hack for Clion to include all zephyr workspace files in the project file tree view.
+include_directories(${ZEPHYR_BASE}/..)
