@@ -9,6 +9,7 @@
 #include "control/control.h"
 #include "zephyr/device.h"
 #include "zephyr/devicetree.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -55,7 +56,7 @@ bool had_a_target_pos = false;
 #define GRID_SIZE_Y (2 * GRID_REZ + 1)
 #define GRID_SIZE_X (3 * GRID_REZ + 1)
 #define BOARD_BORDER_MARGIN ROBOT_RADIUS
-#define COLLISION_MARGIN    0.05f
+#define COLLISION_MARGIN    50.0f
 #define OBSTACLE_MARGIN     (ROBOT_RADIUS + OPPONENT_ROBOT_MAX_RADIUS + COLLISION_MARGIN)
 
 #define BOARD_TO_ASTAR_GRID_DIM(x) ((x) * (GRID_SIZE_X - 1) / (BOARD_SIZE_X - 2 * BOARD_BORDER_MARGIN))
@@ -83,8 +84,8 @@ static char in_use_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 static char static_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 
 static const pos2_t sensivity = {
-    .x = 0.01f,
-    .y = 0.01f,
+    .x = 10.0f,
+    .y = 10.0f,
     .a = DEG_TO_RAD(2.0f),
 };
 
@@ -397,11 +398,13 @@ static bool is_obstacled_too_close(float angle_dist, float distance)
 {
     if (distance > LIDAR_STOP_DISTANCE_MAX) {
         return false;
+    } else {
+        return true;
     }
-    float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
-                       (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
-    float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
-    return angle_dist < test_angle / 2;
+    // float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
+    //                    (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
+    // float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
+    // return angle_dist < test_angle / 2;
 }
 
 void log_lidar_point(const struct lidar_point *point)
@@ -440,11 +443,11 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
     for (size_t i = 0; i < nb_points; i++) {
         const struct lidar_point *point = &points[i];
 
-        if (point->distance < (ROBOT_CENTER_POLE_RADIUS + 0.04f)) {
+        if (point->distance < (ROBOT_CENTER_POLE_RADIUS + 40.0f)) {
             continue;
         }
 
-        if (point->intensity < 50) {
+        if (point->intensity < 100) {
             continue;
         }
 

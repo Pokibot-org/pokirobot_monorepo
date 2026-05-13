@@ -96,14 +96,14 @@ const pos2_t end_pos = start_pos;
 #define CURSOR_END_X (TEMP_10_X - CURSOR_WIDTH / 3.0f)
 
 pos2_t zone_exit_wp = {
-    .x = BOARD_MIN_X + 2700.0f,
+    .x = BOARD_MIN_X + 2750.0f,
     .y = 1650.0f,
     .a = M_PI,
 };
 
 pos2_t corridor_top_wp = {
     .x = BOARD_MIN_X + 2500.0f,
-    .y = 1300.0f,
+    .y = 1200.0f,
     .a = M_PI,
 };
 
