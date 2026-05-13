@@ -470,14 +470,16 @@ static int mks_pokstepper_speed_mode(const struct device *dev, int16_t speed, ui
     struct mks_pokstepper_data *data = dev->data;
     const struct mks_pokstepper_config *config = dev->config;
 
-    uint8_t speed_high = (uint8_t)(speed >> 8);
-    uint8_t payload[] = {MKS_CMD_SPEED_MODE, speed_high, (uint8_t)(speed & 0xFF), acceleration};
-
-    int ret = mks_send_frame(data->can_dev, config->motor_id, payload, sizeof(payload));
-    if (ret == 0) {
-        LOG_INF("Speed mode: speed=%d, accel=%u, ccw=%d", speed, acceleration);
+    uint8_t dir = 1;
+    if (speed < 0) {
+        dir = 0;
+        speed = -speed;
     }
-    return ret;
+    uint8_t speed_high = (dir << 7) | (uint8_t)((speed >> 8) & 0x0F);
+    uint8_t speed_low = (uint8_t)(speed & 0xFF);
+    uint8_t payload[] = {MKS_CMD_SPEED_MODE, speed_high, speed_low, acceleration};
+
+    return mks_send_frame(data->can_dev, config->motor_id, payload, sizeof(payload));
 }
 
 static int mks_pokstepper_speed_mode_stop(const struct device *dev)
@@ -619,7 +621,11 @@ static int mks_pokstepper_api_enable(const struct device *dev, bool enable)
 
 static int mks_pokstepper_api_set_speed(const struct device *dev, int32_t speed)
 {
-    speed = speed / 256;
+    if (speed > 1500) {
+        speed = 1500;
+    } else if (speed < -1500) {
+        speed = -1500;
+    }
     return mks_pokstepper_speed_mode(dev, speed, 0);
 }
 
@@ -686,6 +692,12 @@ static int mks_pokstepper_init(const struct device *dev)
     if (err)
     {
         LOG_ERR("Can start err %d", err);
+        return -ENODEV;
+    }
+
+    if (mks_pokstepper_speed_mode(dev, 0, 0))
+    {
+        LOG_ERR("Cannot set speed 0 on stepper");
         return -ENODEV;
     }
     

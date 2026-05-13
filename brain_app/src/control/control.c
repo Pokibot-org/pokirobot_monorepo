@@ -210,9 +210,9 @@ vel2_t local_vel_from_world(pos2_t pos, vel2_t world_vel)
 vel2_t local_vel_from_omni(omni3_t omni)
 {
     vel2_t local_vel = {
-        .vx = (2.0f * omni.v2 - omni.v1 - omni.v3) / 3.0f,
-        .vy = M_SQRT3 * (omni.v3 - omni.v1) / 3.0f,
-        .w = omni.v1 + omni.v2 + omni.v3 / (3.0f * ROBOT_L),
+        .vx = (2.0f * omni.v1 - omni.v3 - omni.v2) / 3.0f,
+        .vy = M_SQRT3 * (omni.v2 - omni.v3) / 3.0f,
+        .w = omni.v3 + omni.v1 + omni.v2 / (3.0f * ROBOT_L),
     };
     return local_vel;
 }
@@ -221,9 +221,9 @@ omni3_t omni_from_local_vel(vel2_t local_vel)
 {
     const float w_factor = ROBOT_L * local_vel.w;
     omni3_t omni3 = {
-        .v1 = (-local_vel.vx - M_SQRT3 * local_vel.vy) / 2.0f + w_factor,
-        .v2 = local_vel.vx + w_factor,
-        .v3 = (-local_vel.vx + M_SQRT3 * local_vel.vy) / 2.0f + w_factor,
+        .v1 = local_vel.vx + w_factor,
+        .v2 = (-local_vel.vx + M_SQRT3 * local_vel.vy) / 2.0f + w_factor,
+        .v3 = (-local_vel.vx - M_SQRT3 * local_vel.vy) / 2.0f + w_factor,
     };
     return omni3;
 }
@@ -407,31 +407,35 @@ int control_start(struct control *obj)
 
 void _test_motor_cmd(struct control *obj)
 {
+    uint32_t scale = 1000000;
     k_sleep(K_MSEC(1000));
+    pokstepper_enable(obj->stepper0, true);
+    pokstepper_enable(obj->stepper1, true);
+    pokstepper_enable(obj->stepper2, true);
     while (1) {
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj->stepper0, 100000);
-        pokstepper_set_speed(obj->stepper1, 150000);
-        pokstepper_set_speed(obj->stepper2, 200000);
+        pokstepper_set_speed(obj->stepper0, 10 * scale);
+        pokstepper_set_speed(obj->stepper1, 15 * scale);
+        pokstepper_set_speed(obj->stepper2, 20 * scale);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
-        pokstepper_set_speed(obj->stepper0, 100000);
+        pokstepper_set_speed(obj->stepper0, 10 * scale);
         pokstepper_set_speed(obj->stepper1, 0);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
-        pokstepper_set_speed(obj->stepper1, 100000);
+        pokstepper_set_speed(obj->stepper1, 10 * scale);
         pokstepper_set_speed(obj->stepper2, 0);
         k_sleep(K_MSEC(1000));
         pokstepper_set_speed(obj->stepper0, 0);
         pokstepper_set_speed(obj->stepper1, 0);
-        pokstepper_set_speed(obj->stepper2, 100000);
+        pokstepper_set_speed(obj->stepper2, 10 * scale);
         k_sleep(K_MSEC(1000));
     }
 }
