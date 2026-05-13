@@ -8,16 +8,22 @@ target_include_directories(app PRIVATE src)
 target_sources(app PRIVATE
     src/main.c
     src/nav/nav.c
-    src/control/control.c
+    # src/control/control.c
     src/pokarm/pokarm.c
     src/pomicontrol/pomicontrol.c
     src/astar-jps/IndexPriorityQueue.c
     src/astar-jps/AStar.c
 )
 
-if (CONFIG_MQTT_SIM_MESSENGER)
-    target_sources(app PRIVATE
+
+if(BOARD STREQUAL "native_sim")
+target_sources(app PRIVATE
     src/const_publisher.c
+    src/control/control_sim.c
+)
+else()
+target_sources(app PRIVATE
+    src/control/control.c
 )
 endif()
 

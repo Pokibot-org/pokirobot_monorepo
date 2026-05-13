@@ -16,23 +16,18 @@ aliases {
         compatible = "pokibot,empty-pokstepper";
     };
 
-    servo_deploy_arm: servo_deploy_arm {
+    stepper0: stepper0 {
         status = "okay";
-        compatible = "pokibot,empty-servomotor";
+        compatible = "pokibot,empty-pokstepper";
     };
 
-    servo_left_gripper: servo_left_gripper {
+    stepper1: stepper1 {
         status = "okay";
-        compatible = "pokibot,empty-servomotor";
+        compatible = "pokibot,empty-pokstepper";
     };
 
-    servo_right_gripper: servo_right_gripper {
+    stepper2: stepper2 {
         status = "okay";
-        compatible = "pokibot,empty-servomotor";
-    };
-
-    servo_banner: servo_banner {
-        status = "okay";
-        compatible = "pokibot,empty-servomotor";
+        compatible = "pokibot,empty-pokstepper";
     };
 };

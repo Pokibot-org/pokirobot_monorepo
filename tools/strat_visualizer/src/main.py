@@ -112,9 +112,9 @@ class RobotObstacle(Obstacle):
 
 
 class Robot:
-    def __init__(self, radius=0.166, team=0) -> None:
+    def __init__(self, radius=180, team=0) -> None:
         self.radius = radius
-        self.pos = np.array([0.0, 1.0, 0.0])
+        self.pos = np.array([0.0, 1000, 0.0])
         self.dir = 0.0
         self.team = team
         self.lidar_points: list[tuple[float, float]] = []
@@ -204,7 +204,7 @@ class PoklegscomSim(SimPart):
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
-        self.speed = 0.5
+        self.speed = 500
         self.angle_speed = 3.14/2
         self.sensivity = 0.01
 
@@ -323,12 +323,12 @@ class GameZoneVisualizer:
         self.screen = screen
         self.right_margin_ratio = 1/6
 
-        self.real_size = [3.0, 2.0]
-        self.mins = [-1.5, 0.0]
-        self.maxs = [1.5, 2.0]
+        self.real_size = [3000, 2000]
+        self.mins = [-1500, 0]
+        self.maxs = [1500, 2000]
         self.dim_x = [0, 1]
         self.dim_y = [0, 1]
-        self.rl_to_px_ratio = 1
+        self.rl_to_px_ratio = 1000
         self.display_wps = True
         self.bg = load_image("vinyle.png")
         self.bg_ratio = self.bg.get_width() / self.bg.get_height()
@@ -434,10 +434,10 @@ class PokibotGameVisualizer:
                     if "robot_obstacle" in self.world.obstacles:
                         self.world.obstacles.pop("robot_obstacle")
                     else:
-                        self.world.obstacles["robot_obstacle"] = RobotObstacle([0.0, 1.0], 0.20)
+                        self.world.obstacles["robot_obstacle"] = RobotObstacle([0.0, 1000], 200)
             if "robot_obstacle" in self.world.obstacles:
                 keys = pg.key.get_pressed()
-                movement_speed = 0.025
+                movement_speed = 25
                 ro = self.world.obstacles["robot_obstacle"]
                 if keys[pg.K_LEFT]:
                     ro.set_pos(ro.get_pos() - np.array([movement_speed, 0.0]))
