@@ -69,7 +69,7 @@ const struct nav_obstacle start_zone = {
     .data.rectangle = {
         .point = {
             .x = BOARD_MIN_X + 2700.0f,
-            .y = 1800.0f
+            .y = 1775.0f
         },
         .height = 450.0f,
         .width = 600.0f,
@@ -80,7 +80,7 @@ const struct nav_obstacle end_zone = start_zone;
 
 const pos2_t start_pos = {
     .x = BOARD_MIN_X + 2700.0f,
-    .y = 1800.0f,
+    .y = 1775.0f,
     .a = M_PI,
 };
 
