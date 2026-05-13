@@ -13,12 +13,9 @@
 
 #define ROBOT_RADIUS                 180.0f
 #define ROBOT_DIST_TO_FLAT_SIZE      165.0f
-#define ROBOT_CENTER_TO_GRIPPER_DIST 210.0f
 #define ROBOT_CENTER_POLE_RADIUS     49.0f
 
-#define ROBOT_BATTERY_OFFSET         (-M_PI / 2.0f)
-#define ROBOT_ARM_ANGLE_OFFSET       (ROBOT_BATTERY_OFFSET + 2.0f * M_PI / 3.0f)
-#define ROBOT_CALIB_SIDE_OFFSET      (-M_PI / 3.0f)
+#define ROBOT_CALIB_SIDE_OFFSET      (-M_PI / 2)
 
 #define OPPONENT_ROBOT_MAX_RADIUS   191.0f // 1.2/(2*pi)
 
