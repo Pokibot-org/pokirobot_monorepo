@@ -234,12 +234,47 @@ class PoklegscomSim(SimPart):
                 self.motor_break = payload["state"]
 
     def movement_sim(self, dt):
-        max_speed_vec = np.array([self.speed*dt, self.speed*dt, self.angle_speed*dt])
-        sensivity = np.array([self.sensivity, self.sensivity, self.sensivity])
+        sensivity = np.array([
+            self.sensivity,
+            self.sensivity,
+            self.sensivity
+        ])
+
         nb_wps = len(self.wps)
+
         if self.wp_index < nb_wps and not self.motor_break:
             target_pos = self.wps[self.wp_index]
-            self.robot.pos += np.maximum(np.minimum(target_pos - self.robot.pos, max_speed_vec), -max_speed_vec)
+
+            delta = target_pos - self.robot.pos
+
+            # Separate XY and angle
+            delta_xy = delta[:2]
+            delta_angle = delta[2]
+
+            # Smooth proportional XY cap
+            dist_xy = np.linalg.norm(delta_xy)
+
+            if dist_xy > 1e-6:
+                max_step_xy = self.speed * dt
+
+                # move proportionally toward target
+                step_xy = delta_xy / dist_xy * min(dist_xy, max_step_xy)
+            else:
+                step_xy = np.zeros(2)
+
+            # Independent angular clamp
+            step_angle = np.clip(
+                delta_angle,
+                -self.angle_speed * dt,
+                self.angle_speed * dt
+            )
+
+            self.robot.pos += np.array([
+                step_xy[0],
+                step_xy[1],
+                step_angle
+            ])
+
             if np.all(np.abs(target_pos - self.robot.pos) < sensivity):
                 self.wp_index += 1
                 self.robot.wps = self.wps[min(self.wp_index, nb_wps - 1):]
