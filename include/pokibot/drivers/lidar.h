@@ -15,7 +15,7 @@ extern "C" {
  */
 struct lidar_point {
     float angle;       // Angle of the measurement (in radians, counter clockwise)
-    float distance;    // Distance of the measurement (in meters)
+    float distance;    // Distance of the measurement (in mm)
     uint8_t intensity; // Intensity or quality of the measurement (0-255)
 };
 

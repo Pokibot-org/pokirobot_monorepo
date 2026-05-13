@@ -125,7 +125,7 @@ static void ld19_process_measure(struct ld19_data *data, LiDARMeasureDataType *m
 
     for (int i = 0; i < nb_measure_points; i++) {
         struct lidar_point current_point = {
-            .distance = (float)(measure->point[i].distance) / 1000.0f,
+            .distance = (float)(measure->point[i].distance),
             .angle = ld19_angle_normalize(-LD_DEG_TO_RAD(start_angle_deg + step_deg * i)),
             .intensity = measure->point[i].intensity,
         };
