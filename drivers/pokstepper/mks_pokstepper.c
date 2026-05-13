@@ -720,6 +720,25 @@ static int mks_pokstepper_init(const struct device *dev)
         return -ENODEV;
     }
 
+    if (mks_pokstepper_set_current(dev, 3000))
+    {
+        LOG_ERR("Cannot write current mode");
+        return -ENODEV;
+    }
+
+    // 1 is 20%
+    if (mks_pokstepper_set_hold_current(dev, 1))
+    {
+        LOG_ERR("Cannot write hold current ratio mode");
+        return -ENODEV;
+    }
+
+    if (mks_pokstepper_set_interpolator(dev, true))
+    {
+        LOG_ERR("Cannot write interpolator mode");
+        return -ENODEV;
+    }
+
     if (mks_pokstepper_set_enable(dev, data->motor_enabled))
     {
         LOG_ERR("Cannot enable stepper");
