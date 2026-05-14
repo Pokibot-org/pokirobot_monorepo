@@ -456,7 +456,7 @@ void lidar_callback(const struct lidar_point *points, size_t nb_points, void *us
         float point_dir_robot_ref = angle_normalize(point->angle);
         float point_dir_table_ref = angle_normalize(point_dir_robot_ref + robot_pos.a);
         float angle_dist_point_to_robot_dir =
-            fabsf(angle_normalize(point_dir_table_ref - robot_dir));
+            fabsf(angle_normalize(point_dir_robot_ref - robot_dir));
         point2_t lidar_point2 = {
             .x = cosf(point_dir_table_ref) * point->distance + robot_pos.x,
             .y = sinf(point_dir_table_ref) * point->distance + robot_pos.y,
