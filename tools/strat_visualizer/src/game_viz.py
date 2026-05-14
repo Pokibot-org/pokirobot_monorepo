@@ -73,7 +73,7 @@ class GameZoneVisualizer:
         on_board_radius = self.get_on_board_dim(robot.radius)
         team = 1 if robot.team else 0
         scaled = self._scaled_robot_img(team)
-        rotated = pg.transform.rotate(scaled, math.degrees(robot.dir) - 90)
+        rotated = pg.transform.rotate(scaled, math.degrees(robot.pos[2]))
         rect = rotated.get_rect(center=on_board_pos)
         self.screen.blit(rotated, rect)
         # Debug overlay: commanded heading (red) vs actual pos[2] angle (gray)

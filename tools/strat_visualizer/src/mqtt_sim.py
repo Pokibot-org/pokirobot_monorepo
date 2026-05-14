@@ -99,7 +99,7 @@ class PoklegscomSim(SimPart):
         self.wp_index = 0
         self.wps = []
         self.motor_break = False
-        self.speed = 500
+        self.speed = 400
         self.angle_speed = 3.14 / 2
         self.sensivity = 0.01
 
