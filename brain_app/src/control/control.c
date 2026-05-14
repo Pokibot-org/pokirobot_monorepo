@@ -22,11 +22,11 @@ LOG_MODULE_REGISTER(control);
 #define WHEEL_PERIMETER   515.221195188726f
 #define MM_TO_USTEPS      1417.0f
 
-#define PLANAR_VMAX_DEFAULT                   800.0f // 700 mm/s
-#define PLANAR_FACTOR(_planar_vmax)           (0.06f * (_planar_vmax))
-#define PLANAR_RAMP(_planar_vmax)             (2.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
+#define PLANAR_VMAX_DEFAULT                400.0f // 700 mm/s
+#define PLANAR_FACTOR(_planar_vmax)         (0.06f * (_planar_vmax))
+#define PLANAR_RAMP(_planar_vmax)           (2.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
 
-#define ANGULAR_VMAX_DEFAULT                  (1.0f * M_PI) // 0.5 rotation/s
+#define ANGULAR_VMAX_DEFAULT   (0.7f * M_PI) // 0.5 rotation/s
 #define ANGULAR_FACTOR(_angular_vmax)         (0.7f * (_angular_vmax))
 #define ANGULAR_RAMP(_angular_vmax)           (0.5f * (_angular_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
 
