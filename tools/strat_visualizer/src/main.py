@@ -379,6 +379,13 @@ class GameZoneVisualizer:
         self.display_wps = True
         self.bg = load_image("vinyle.png")
         self.bg_ratio = self.bg.get_width() / self.bg.get_height()
+        # Robot art — index by team (0=blue, 1=yellow). Source assets face +Y
+        # (up) in the image, so we apply a -90° offset when rotating.
+        self._robot_imgs = {
+            0: pg.image.load(os.path.join(main_dir, "../img", "robot_blue.png")).convert_alpha(),
+            1: pg.image.load(os.path.join(main_dir, "../img", "robot_yellow.png")).convert_alpha(),
+        }
+        self._robot_scaled = {}  # (team, diameter_px) -> scaled Surface
 
     def get_on_board_pos(self, pos):
         # dim_x = [left, right], dim_y = [top, bottom] of the board in screen coords.
@@ -390,12 +397,34 @@ class GameZoneVisualizer:
     def get_on_board_dim(self, dim):
         return dim * self.rl_to_px_ratio
 
+    ROBOT_IMG_MM_PER_PX = 1.0  # source assets: 1 pixel = 1 mm
+
+    def _scaled_robot_img(self, team: int):
+        # cache key quantises the scale so subpixel ratio changes don't churn
+        key = (team, round(self.rl_to_px_ratio, 4))
+        cached = self._robot_scaled.get(key)
+        if cached is not None:
+            return cached
+        src = self._robot_imgs[team]
+        sw, sh = src.get_width(), src.get_height()
+        screen_per_src_px = self.ROBOT_IMG_MM_PER_PX * self.rl_to_px_ratio
+        target = (max(1, int(round(sw * screen_per_src_px))),
+                  max(1, int(round(sh * screen_per_src_px))))
+        scaled = pg.transform.smoothscale(src, target)
+        if len(self._robot_scaled) > 8:
+            self._robot_scaled.clear()
+        self._robot_scaled[key] = scaled
+        return scaled
+
     def draw_robot(self, robot: Robot):
         on_board_pos = self.get_on_board_pos(robot.pos)
         on_board_radius = self.get_on_board_dim(robot.radius)
-        color = COLOR_TEAM_YELLOW if robot.team else COLOR_TEAM_BLUE
-        pg.draw.circle(self.screen, (0,0,0), on_board_pos, on_board_radius)
-        pg.draw.circle(self.screen, color, on_board_pos, on_board_radius * 0.9)
+        team = 1 if robot.team else 0
+        scaled = self._scaled_robot_img(team)
+        rotated = pg.transform.rotate(scaled, math.degrees(robot.dir) - 90)
+        rect = rotated.get_rect(center=on_board_pos)
+        self.screen.blit(rotated, rect)
+        # Debug overlay: commanded heading (red) vs actual pos[2] angle (gray)
         pg.draw.line(
             self.screen,
             COLOR_RED,
@@ -500,7 +529,7 @@ def copy_to_clipboard(text: str) -> str:
 class PathSimulator:
     PREVIEW_KEY = "sim_preview"
 
-    def __init__(self, world: World, planner=None):
+    def __init__(self, world: World, planner=None, on_user_running=None):
         self.world = world
         self.planner = planner
         self.robot = Robot(team=0)
@@ -512,6 +541,7 @@ class PathSimulator:
         self.angle_speed = math.pi / 2  # rad/s
         self.pos_tol = 5.0  # mm
         self.ang_tol = 0.02  # rad
+        self._on_user_paused = on_user_running or (lambda running: None)
 
     def _sync_team(self):
         if self.planner is not None:
@@ -538,15 +568,18 @@ class PathSimulator:
             self.running = self.wp_index < len(self.wps)
         else:
             self.running = not self.running
+        self._on_user_paused(self.running)
 
     def reset(self, waypoints):
         self._load(waypoints)
         self.running = False
+        self._on_user_paused(False)
 
     def stop(self):
         self.running = False
         self.started = False
         self.world.robots.pop(self.PREVIEW_KEY, None)
+        self._on_user_paused(False)
 
     def _avoidance_velocity(self, desired_dir, dist_to_target):
         """Potential-field steering. desired_dir is a unit vector toward the target."""
@@ -626,6 +659,10 @@ class PathPlanner:
         self._edit_index = None
         self._drag_start = None
         self._drag_current = None
+        # hover state — used for tooltip + cycling overlapped waypoints
+        self._hover_world = None
+        self._hover_indices = []  # all wps within HIT_RADIUS, sorted by distance
+        self._hover_cycle = 0     # which one of _hover_indices is "active"
 
     @staticmethod
     def _wrap_angle(a):
@@ -646,31 +683,63 @@ class PathPlanner:
             return angle
         return round(angle / self.angle_step) * self.angle_step
 
-    def find_index_near(self, world_pos):
+    def find_indices_near(self, world_pos):
         if world_pos is None:
-            return None
+            return []
         wx, wy = world_pos
         r2 = self.HIT_RADIUS_MM ** 2
-        best = None
-        best_d2 = r2
+        hits = []
         for i, (x, y, _) in enumerate(self.waypoints):
             d2 = (x - wx) ** 2 + (y - wy) ** 2
-            if d2 <= best_d2:
-                best_d2 = d2
-                best = i
-        return best
+            if d2 <= r2:
+                hits.append((d2, i))
+        hits.sort()
+        return [i for _, i in hits]
+
+    def find_index_near(self, world_pos):
+        idxs = self.find_indices_near(world_pos)
+        return idxs[0] if idxs else None
+
+    def set_hover(self, world_pos):
+        # called on MOUSEMOTION while not dragging
+        self._hover_world = world_pos
+        prev = list(self._hover_indices)
+        self._hover_indices = self.find_indices_near(world_pos)
+        # reset cycle if the set of overlapping wps changed
+        if self._hover_indices != prev:
+            self._hover_cycle = 0
+        elif self._hover_indices:
+            self._hover_cycle %= len(self._hover_indices)
+
+    def cycle_hover(self, delta: int):
+        if not self._hover_indices:
+            return
+        self._hover_cycle = (self._hover_cycle + int(delta)) % len(self._hover_indices)
+
+    def _hovered_index(self):
+        if not self._hover_indices:
+            return None
+        return self._hover_indices[self._hover_cycle % len(self._hover_indices)]
 
     def delete_at(self, world_pos) -> bool:
-        i = self.find_index_near(world_pos)
+        # delete the currently-active hovered wp if any, otherwise nearest
+        i = self._hovered_index() if self._hover_world == world_pos else None
+        if i is None:
+            i = self.find_index_near(world_pos)
         if i is None:
             return False
         self.waypoints.pop(i)
+        self._hover_indices = []
+        self._hover_cycle = 0
         return True
 
     def start_drag(self, world_pos, shift=False):
         if world_pos is None:
             return
-        hit = self.find_index_near(world_pos)
+        # honor the active hovered wp so overlap-cycling actually picks the one shown
+        hit = self._hovered_index() if self._hover_world == world_pos else None
+        if hit is None:
+            hit = self.find_index_near(world_pos)
         if hit is not None:
             self._edit_index = hit
             self._mode = "rotate" if shift else "move"
@@ -809,6 +878,82 @@ class PathPlanner:
         ])
         pg.draw.polygon(screen, color, [(bx, by), left, right])
 
+    def _draw_segment_alpha(self, screen, start, end, alpha, color=COLOR_WP):
+        if alpha >= 255:
+            pg.draw.line(screen, COLOR_WP_HALO, start, end, width=6)
+            pg.draw.line(screen, color, start, end, width=3)
+            return
+        pad = 6  # halo half-width + headroom
+        x0 = int(min(start[0], end[0])) - pad
+        y0 = int(min(start[1], end[1])) - pad
+        x1 = int(max(start[0], end[0])) + pad
+        y1 = int(max(start[1], end[1])) + pad
+        w, h = max(1, x1 - x0), max(1, y1 - y0)
+        overlay = pg.Surface((w, h), pg.SRCALPHA)
+        s = (start[0] - x0, start[1] - y0)
+        e = (end[0] - x0, end[1] - y0)
+        pg.draw.line(overlay, COLOR_WP_HALO, s, e, width=6)
+        pg.draw.line(overlay, color, s, e, width=3)
+        overlay.set_alpha(alpha)
+        screen.blit(overlay, (x0, y0))
+
+    def _draw_arrow_alpha(self, screen, start, end, color, alpha):
+        if alpha >= 255:
+            self._draw_arrow(screen, start, end, color)
+            return
+        # render onto a small local overlay sized to the arrow bbox
+        pad = 10  # covers halo + arrowhead width
+        x0 = int(min(start[0], end[0])) - pad
+        y0 = int(min(start[1], end[1])) - pad
+        x1 = int(max(start[0], end[0])) + pad
+        y1 = int(max(start[1], end[1])) + pad
+        w, h = max(1, x1 - x0), max(1, y1 - y0)
+        overlay = pg.Surface((w, h), pg.SRCALPHA)
+        self._draw_arrow(overlay, (start[0] - x0, start[1] - y0), (end[0] - x0, end[1] - y0), color)
+        overlay.set_alpha(alpha)
+        screen.blit(overlay, (x0, y0))
+
+    def _draw_marker_alpha(self, screen, sp, color, label_text, font, alpha):
+        if alpha >= 255:
+            self._draw_marker(screen, sp, color, label_text, font)
+            return
+        # local overlay sized to the marker bbox; cheaper than full-screen overlay
+        outer_r = 13
+        pad = outer_r + 6
+        size = pad * 2
+        overlay = pg.Surface((size, size), pg.SRCALPHA)
+        self._draw_marker(overlay, (pad, pad), color, label_text, font)
+        overlay.set_alpha(alpha)
+        screen.blit(overlay, (sp[0] - pad, sp[1] - pad))
+
+    def _draw_hover_tooltip(self, screen, font, idx, mouse_screen_pos):
+        if idx >= len(self.waypoints):
+            return
+        x, y, a = self.waypoints[idx]
+        a_deg = math.degrees(a)
+        lines = [
+            f"#{idx + 1}  x={x:.0f}  y={y:.0f}",
+            f"a={a:.3f} rad ({a_deg:.1f}°)",
+        ]
+        if len(self._hover_indices) > 1:
+            pos = (self._hover_cycle % len(self._hover_indices)) + 1
+            lines.append(f"overlap {pos}/{len(self._hover_indices)} — scroll to cycle")
+        surfs = [font.render(line, True, SIDEBAR_FG) for line in lines]
+        pad = 6
+        w = max(s.get_width() for s in surfs) + pad * 2
+        h = sum(s.get_height() for s in surfs) + pad * 2
+        sw, sh = screen.get_size()
+        tx = min(mouse_screen_pos[0] + 16, sw - w - 4)
+        ty = min(mouse_screen_pos[1] + 16, sh - h - 4)
+        bg = pg.Surface((w, h), pg.SRCALPHA)
+        bg.fill((10, 10, 14, 220))
+        screen.blit(bg, (tx, ty))
+        pg.draw.rect(screen, SIDEBAR_DIM, pg.Rect(tx, ty, w, h), width=1, border_radius=4)
+        cy = ty + pad
+        for s in surfs:
+            screen.blit(s, (tx + pad, cy))
+            cy += s.get_height()
+
     def _draw_marker(self, screen, sp, color, label_text, font):
         outer_r = 13
         inner_r = 9
@@ -824,29 +969,94 @@ class PathPlanner:
             label = font.render(label_text, True, COLOR_WP_HALO)
             screen.blit(label, (sp[0] - label.get_width() // 2, sp[1] - label.get_height() // 2))
 
-    def draw(self, game_viz, screen):
+    # Gradient stops from "current target" to "far / passed": radiant cyan-blue
+    # → blue → purple → near-black. Sampled by _color_for().
+    _GRADIENT = [
+        (0x00, 0xE5, 0xFF),  # 0 — radiant cyan (next target)
+        (0x3A, 0x7B, 0xFF),  # 1 — bright blue
+        (0x6C, 0x3A, 0xD0),  # 2 — violet
+        (0x32, 0x16, 0x60),  # 3 — deep purple
+        (0x12, 0x08, 0x24),  # 4 — near-black
+    ]
+
+    def _path_offset(self, idx, sim) -> float:
+        """Continuous offset (>=0) along the path from sim.wp_index.
+        Passed waypoints saturate at the max offset so they sit at the darkest stop."""
+        if sim is None or not getattr(sim, "started", False):
+            return 0.0
+        wp_index = getattr(sim, "wp_index", idx)
+        if idx < wp_index:
+            return float(len(self._GRADIENT) - 1)
+        return float(idx - wp_index)
+
+    def _alpha_for(self, idx, sim) -> int:
+        if sim is None or not getattr(sim, "started", False):
+            return 255
+        min_alpha, step = 60, 50
+        offset = self._path_offset(idx, sim)
+        # Passed waypoints (offset saturated) → min_alpha directly
+        wp_index = getattr(sim, "wp_index", idx)
+        if idx < wp_index:
+            return min_alpha
+        return max(min_alpha, 255 - int(offset) * step)
+
+    def _color_for(self, idx, sim):
+        if sim is None or not getattr(sim, "started", False):
+            return self._GRADIENT[0]
+        offset = self._path_offset(idx, sim)
+        last = len(self._GRADIENT) - 1
+        t = max(0.0, min(offset, last))
+        lo = int(t)
+        hi = min(lo + 1, last)
+        frac = t - lo
+        c0 = self._GRADIENT[lo]
+        c1 = self._GRADIENT[hi]
+        return (
+            int(c0[0] + (c1[0] - c0[0]) * frac),
+            int(c0[1] + (c1[1] - c0[1]) * frac),
+            int(c0[2] + (c1[2] - c0[2]) * frac),
+        )
+
+    def draw(self, game_viz, screen, sim=None, mouse_screen_pos=None):
         arrow_len_world = 180  # mm
         try:
             font = pg.font.SysFont("monospace", 14, bold=True)
         except Exception:
             font = pg.font.Font(None, 16)
 
-        # Path lines: dark halo + bright stroke
-        if len(self.waypoints) >= 2:
-            pts = [game_viz.get_on_board_pos((x, y)) for (x, y, _) in self.waypoints]
-            pg.draw.lines(screen, COLOR_WP_HALO, False, pts, width=6)
-            pg.draw.lines(screen, COLOR_WP, False, pts, width=3)
+        hovered = self._hovered_index()
 
-        # Direction arrows (drawn under markers so the marker sits on top of the shaft)
-        for (x, y, a) in self.waypoints:
-            sp = game_viz.get_on_board_pos((x, y))
-            tip = game_viz.get_on_board_pos((x + arrow_len_world * math.cos(a), y + arrow_len_world * math.sin(a)))
-            self._draw_arrow(screen, sp, tip, COLOR_WP)
+        # Precompute screen positions, per-waypoint alpha + gradient color
+        sps = [game_viz.get_on_board_pos((x, y)) for (x, y, _) in self.waypoints]
+        wp_alpha = [self._alpha_for(i, sim) for i in range(len(self.waypoints))]
+        wp_color = [self._color_for(i, sim) for i in range(len(self.waypoints))]
 
-        # Markers on top
-        for i, (x, y, _) in enumerate(self.waypoints):
-            sp = game_viz.get_on_board_pos((x, y))
-            self._draw_marker(screen, sp, COLOR_WP, str(i + 1), font)
+        # Two-pass draw so opaque (important) items sit on top of faded ones.
+        # Pass 0: alpha < 255 (passed / far-future), Pass 1: alpha == 255.
+        for opaque_pass in (False, True):
+            # Path segments — use the "more important" endpoint's color
+            if len(self.waypoints) >= 2:
+                for i in range(len(sps) - 1):
+                    alpha = max(wp_alpha[i], wp_alpha[i + 1])
+                    if (alpha >= 255) != opaque_pass:
+                        continue
+                    color = wp_color[i] if wp_alpha[i] >= wp_alpha[i + 1] else wp_color[i + 1]
+                    self._draw_segment_alpha(screen, sps[i], sps[i + 1], alpha, color)
+            # Direction arrows
+            for i, (x, y, a) in enumerate(self.waypoints):
+                alpha = wp_alpha[i]
+                if (alpha >= 255) != opaque_pass:
+                    continue
+                sp = sps[i]
+                tip = game_viz.get_on_board_pos((x + arrow_len_world * math.cos(a), y + arrow_len_world * math.sin(a)))
+                self._draw_arrow_alpha(screen, sp, tip, wp_color[i], alpha)
+            # Markers
+            for i, (x, y, a) in enumerate(self.waypoints):
+                alpha = wp_alpha[i]
+                if (alpha >= 255) != opaque_pass:
+                    continue
+                color = COLOR_WP_PENDING if i == hovered else wp_color[i]
+                self._draw_marker_alpha(screen, sps[i], color, str(i + 1), font, alpha)
 
         pending = self.pending()
         if pending is not None:
@@ -856,28 +1066,47 @@ class PathPlanner:
             self._draw_arrow(screen, sp, tip, COLOR_WP_PENDING)
             self._draw_marker(screen, sp, COLOR_WP_PENDING, "", font)
 
+        # Hover tooltip
+        if hovered is not None and mouse_screen_pos is not None:
+            self._draw_hover_tooltip(screen, font, hovered, mouse_screen_pos)
+
 
 class KeyBindings:
-    def __init__(self):
-        self._entries = []  # list of dicts: {key, label, handler, repeat}
+    """Holds two independent collections:
+    - handlers: (key, callable, repeat) — what actually fires on input.
+    - docs: (display, label, repeat) — what the keybindings panel shows.
 
-    def register(self, key, label, handler, repeat=False):
-        self._entries.append({"key": key, "label": label, "handler": handler, "repeat": repeat})
+    Several handlers can share a single doc row (e.g. arrow keys → "move obstacle")
+    by registering handlers with `bind(..., document=False)` and then calling
+    `document(display, label, ...)` once for the group.
+    """
+
+    def __init__(self):
+        self._handlers = []  # (key, handler, repeat)
+        self._docs = []      # (display, label, repeat)
+
+    def bind(self, key, handler, repeat=False, doc=None):
+        self._handlers.append((key, handler, repeat))
+        if doc is not None:
+            self._docs.append((_key_name(key), doc, repeat))
+
+    def document(self, display, label, repeat=False):
+        self._docs.append((display, label, repeat))
 
     def dispatch(self, event):
         if event.type != pg.KEYDOWN:
             return
-        for e in self._entries:
-            if not e["repeat"] and e["key"] == event.key:
-                e["handler"]()
+        for key, handler, repeat in self._handlers:
+            if not repeat and key == event.key:
+                handler()
 
     def poll(self, pressed):
-        for e in self._entries:
-            if e["repeat"] and pressed[e["key"]]:
-                e["handler"]()
+        for key, handler, repeat in self._handlers:
+            if repeat and pressed[key]:
+                handler()
 
-    def entries(self):
-        return list(self._entries)
+    def docs(self):
+        return list(self._docs)
 
 
 def _key_name(key):
@@ -1092,18 +1321,17 @@ class KeybindingsPanel(Panel):
         self.row_h = 20
 
     def get_height(self, width, font):
-        return self.row_h * (len(self.bindings.entries()) + 1) + 8
+        return self.row_h * (len(self.bindings.docs()) + 1) + 8
 
     def draw(self, surface, rect, font):
         x, y, w, _ = rect
         title_surf = font.render(self.title, True, SIDEBAR_ACCENT)
         surface.blit(title_surf, (x, y))
         y += self.row_h
-        for e in self.bindings.entries():
-            key_str = _key_name(e["key"])
-            suffix = " (hold)" if e["repeat"] else ""
-            key_surf = font.render(f"[{key_str}]{suffix}", True, SIDEBAR_FG)
-            label_surf = font.render(e["label"], True, SIDEBAR_DIM)
+        for display, label, repeat in self.bindings.docs():
+            suffix = " (hold)" if repeat else ""
+            key_surf = font.render(f"[{display}]{suffix}", True, SIDEBAR_FG)
+            label_surf = font.render(label, True, SIDEBAR_DIM)
             surface.blit(key_surf, (x, y))
             surface.blit(label_surf, (x + 110, y))
             y += self.row_h
@@ -1357,8 +1585,9 @@ def state_save(path: str, side: str, waypoints):
 
 
 class PokibotGameVisualizer:
-    def __init__(self, world: World):
+    def __init__(self, world: World, on_pause_changed=None):
         self.world = world
+        self.on_pause_changed = on_pause_changed or (lambda paused: None)
 
     def run(self):
         pg.init()
@@ -1401,23 +1630,29 @@ class PokibotGameVisualizer:
             planner.angle_step = math.pi / new_x
             snap_panel.angle_slider.value = new_x
 
-        bindings.register(pg.K_w, "toggle waypoints", toggle_wps)
-        bindings.register(pg.K_a, "toggle robot obstacle", toggle_robot_obstacle)
-        bindings.register(pg.K_z, "undo waypoint", planner.undo)
-        bindings.register(pg.K_x, "clear path", planner.clear)
-        bindings.register(pg.K_c, "open code preview", lambda: open_preview(planner.to_c_string()))
-        bindings.register(pg.K_SPACE, "sim play/pause", lambda: plan_panel._play_pause())
-        bindings.register(pg.K_ESCAPE, "sim reset", lambda: plan_panel._reset_sim())
-        bindings.register(pg.K_g, "toggle grid snap", lambda: setattr(planner, "grid_enabled", not planner.grid_enabled))
-        bindings.register(pg.K_t, "toggle angle snap", lambda: setattr(planner, "angle_enabled", not planner.angle_enabled))
-        bindings.register(pg.K_MINUS, "grid size prev", lambda: adj_grid(-1))
-        bindings.register(pg.K_EQUALS, "grid size next", lambda: adj_grid(+1))
-        bindings.register(pg.K_COMMA, "angle denom -1", lambda: adj_angle(-1))
-        bindings.register(pg.K_PERIOD, "angle denom +1", lambda: adj_angle(+1))
-        bindings.register(pg.K_LEFT, "move obstacle -x", lambda: move_obstacle(-movement_speed, 0.0), repeat=True)
-        bindings.register(pg.K_RIGHT, "move obstacle +x", lambda: move_obstacle(movement_speed, 0.0), repeat=True)
-        bindings.register(pg.K_UP, "move obstacle +y", lambda: move_obstacle(0.0, movement_speed), repeat=True)
-        bindings.register(pg.K_DOWN, "move obstacle -y", lambda: move_obstacle(0.0, -movement_speed), repeat=True)
+        bindings.bind(pg.K_w, toggle_wps, doc="toggle waypoints")
+        bindings.bind(pg.K_a, toggle_robot_obstacle, doc="toggle robot obstacle")
+        bindings.bind(pg.K_z, planner.undo, doc="undo waypoint")
+        bindings.bind(pg.K_x, planner.clear, doc="clear path")
+        bindings.bind(pg.K_c, lambda: open_preview(planner.to_c_string()), doc="open code preview")
+        bindings.bind(pg.K_SPACE, lambda: plan_panel._play_pause(), doc="sim play/pause")
+        bindings.bind(pg.K_ESCAPE, lambda: plan_panel._reset_sim(), doc="sim reset")
+        bindings.bind(pg.K_g, lambda: setattr(planner, "grid_enabled", not planner.grid_enabled), doc="toggle grid snap")
+        bindings.bind(pg.K_t, lambda: setattr(planner, "angle_enabled", not planner.angle_enabled), doc="toggle angle snap")
+
+        bindings.bind(pg.K_o, lambda: adj_grid(-1))
+        bindings.bind(pg.K_p, lambda: adj_grid(+1))
+        bindings.document("O/P", "grid size")
+
+        bindings.bind(pg.K_k, lambda: adj_angle(-1))
+        bindings.bind(pg.K_l, lambda: adj_angle(+1))
+        bindings.document("K/L", "angle denom")
+
+        bindings.bind(pg.K_LEFT, lambda: move_obstacle(-movement_speed, 0.0), repeat=True)
+        bindings.bind(pg.K_RIGHT, lambda: move_obstacle(movement_speed, 0.0), repeat=True)
+        bindings.bind(pg.K_UP, lambda: move_obstacle(0.0, movement_speed), repeat=True)
+        bindings.bind(pg.K_DOWN, lambda: move_obstacle(0.0, -movement_speed), repeat=True)
+        bindings.document("arrows", "move obstacle", repeat=True)
 
         def fmt_robots():
             return f"{len(self.world.robots)}"
@@ -1449,7 +1684,10 @@ class PokibotGameVisualizer:
             ("wps", fmt_wps_visible),
         ])
 
-        simulator = PathSimulator(self.world, planner)
+        simulator = PathSimulator(
+            self.world, planner,
+            on_user_running=lambda running: self.on_pause_changed(not running),
+        )
 
         preview_ref = [None]  # list-as-cell for mutation from closures
 
@@ -1473,7 +1711,7 @@ class PokibotGameVisualizer:
         sidebar_capture = False
         sim_dt = 1.0 / 60.0
 
-        bindings.register(pg.K_s, "toggle side", lambda: toggle_side("yellow" if planner.side == "blue" else "blue"))
+        bindings.bind(pg.K_s, lambda: toggle_side("yellow" if planner.side == "blue" else "blue"), doc="switch side")
 
         # --- state persistence ---
         state_path = os.path.join(main_dir, "..", "state.json")
@@ -1508,7 +1746,8 @@ class PokibotGameVisualizer:
             simulator.step(sim_dt)
             game_viz.loop(viewport)
             planner.draw_grid(game_viz, screen)
-            planner.draw(game_viz, screen)
+            mouse_screen_pos = pg.mouse.get_pos()
+            planner.draw(game_viz, screen, sim=simulator, mouse_screen_pos=mouse_screen_pos)
 
             for e in pg.event.get():
                 if e.type == pg.QUIT:
@@ -1516,6 +1755,10 @@ class PokibotGameVisualizer:
                 if e.type == pg.VIDEORESIZE:
                     screen = pg.display.get_surface()
                     game_viz.screen = screen
+                    continue
+                if e.type == pg.MOUSEWHEEL:
+                    if not sidebar_capture and planner._mode is None:
+                        planner.cycle_hover(-e.y)  # wheel up = previous overlap
                     continue
                 if e.type in (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP, pg.MOUSEMOTION):
                     if e.type == pg.MOUSEBUTTONDOWN and sidebar.contains(e.pos):
@@ -1534,10 +1777,14 @@ class PokibotGameVisualizer:
                             planner.start_drag(wp, shift=shift)
                     elif e.type == pg.MOUSEMOTION:
                         wp = game_viz.screen_to_world(e.pos)
-                        planner.update_drag(wp)
+                        if planner._mode is None:
+                            planner.set_hover(wp)
+                        else:
+                            planner.update_drag(wp)
                     elif e.type == pg.MOUSEBUTTONUP and e.button == 1:
                         wp = game_viz.screen_to_world(e.pos)
                         planner.end_drag(wp)
+                        planner.set_hover(wp)
                     elif e.type == pg.MOUSEBUTTONDOWN and e.button == 3:
                         wp = game_viz.screen_to_world(e.pos)
                         if not planner.delete_at(wp):
@@ -1567,8 +1814,14 @@ class PokibotGameSimulator:
         self.world = World()
         # self.world = World(obstacles={"opponent_robot": RobotObstacle([0.0, 1.5], 0.2)})
         self.pokirobot_sim_nodes : dict[str, PokirobotSim]  = {}
-        self.visualizer = PokibotGameVisualizer(self.world)
+        self.visualizer = PokibotGameVisualizer(self.world, on_pause_changed=self._set_mqtt_paused)
         self.last_robot_team = 0
+
+    def _set_mqtt_paused(self, paused: bool):
+        for sim in self.pokirobot_sim_nodes.values():
+            for part in sim.sim_process:
+                if isinstance(part, PoklegscomSim):
+                    part.motor_break = paused
 
     def run(self):
         self.msms.start()
