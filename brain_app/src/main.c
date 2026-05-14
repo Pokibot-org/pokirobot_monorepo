@@ -84,10 +84,12 @@ const pos2_t start_pos = {
     .a = M_PI,
 };
 
+#define BOARD_END_POS_X (BOARD_MIN_X + 2825.0f)
+
 const pos2_t end_pos = {
-    .x = BOARD_MIN_X + 2800.0f,
-    .y = 1600.0f,
-    .a = M_PI,
+    .x = BOARD_END_POS_X,
+    .y = 1775.0f,
+    .a = 2*M_PI,
 };;
 
 #define TEMP_0_WIDTH   250.0f
@@ -106,7 +108,7 @@ pos2_t zone_exit_wp = {
 };
 
 pos2_t zone_enter_wp = {
-    .x = BOARD_MIN_X + 2800.0f,
+    .x = BOARD_END_POS_X - 50.0f,
     .y = 1200.0f,
     .a = 0.0f,
 };
@@ -294,7 +296,7 @@ int match(enum pokprotocol_team color)
         k_sleep(K_MSEC(100));
     }
 
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, M_PI), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, 0.0f), K_FOREVER);
     nav_wait_events(&nav_events);
 
     pokuicom_send_score(123);
