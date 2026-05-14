@@ -24,26 +24,13 @@ logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
-COLOR_DEEPBLACK = (0, 0, 0)
-COLOR_BLACK = (0x33, 0x33, 0x33)
-COLOR_RED = (0xE3, 0x65, 0x5B)
-COLOR_YELLOW = (0xCF, 0xD1, 0x86)
-COLOR_GREEN = (0x5B, 0x8C, 0x5A)
-COLOR_GRAY = (0x59, 0x61, 0x57)
-COLOR_PURPLE = (0x52, 0x41, 0x4C)
-
-COLOR_TEAM_BLUE = (0x00, 0x5B, 0x8C)
-COLOR_TEAM_YELLOW = (0xF7, 0xB5, 0x00)
-
-COLOR_WP = (0x00, 0xE5, 0xFF)        # cyan — high contrast on warm/cool bgs
-COLOR_WP_PENDING = (0xFF, 0x4D, 0x6D)  # pinkish red for in-progress drag
-COLOR_WP_HALO = (0x0A, 0x0A, 0x14)     # near-black outline / drop-shadow
-
-RIGHT_MARGIN_RATIO = 1 / 6
-SIDEBAR_BG = (0x22, 0x22, 0x22)
-SIDEBAR_FG = (0xDD, 0xDD, 0xDD)
-SIDEBAR_DIM = (0x88, 0x88, 0x88)
-SIDEBAR_ACCENT = COLOR_YELLOW
+from constants import (
+    COLOR_DEEPBLACK, COLOR_BLACK, COLOR_RED, COLOR_YELLOW, COLOR_GREEN,
+    COLOR_GRAY, COLOR_PURPLE,
+    COLOR_TEAM_BLUE, COLOR_TEAM_YELLOW,
+    COLOR_WP, COLOR_WP_PENDING, COLOR_WP_HALO,
+    RIGHT_MARGIN_RATIO, SIDEBAR_BG, SIDEBAR_FG, SIDEBAR_DIM, SIDEBAR_ACCENT,
+)
 
 class Obstacle:
     def __init__(self, shape: Polygon) -> None:

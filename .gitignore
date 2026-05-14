@@ -9,3 +9,12 @@ twister-*
 .idea/
 *.env
 *.venv
+venv/
+__pycache__/
+*.pyc
+
+# strat_visualizer local artifacts
+tools/strat_visualizer/.claude/
+tools/strat_visualizer/state.json
+tools/strat_visualizer/exports/
+tools/strat_visualizer/CLAUDE.md
