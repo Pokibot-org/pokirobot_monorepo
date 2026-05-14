@@ -96,45 +96,63 @@ const pos2_t end_pos = start_pos;
 #define CURSOR_END_X (TEMP_10_X - CURSOR_WIDTH / 3.0f)
 
 pos2_t zone_exit_wp = {
-    .x = BOARD_MIN_X + 2750.0f,
+    .x = BOARD_MIN_X + 2700.0f,
     .y = 1650.0f,
-    .a = M_PI,
+    .a = 0.0f,
 };
 
 pos2_t corridor_top_wp = {
     .x = BOARD_MIN_X + 2500.0f,
     .y = 1200.0f,
-    .a = M_PI,
+    .a = 0.0f,
+};
+
+pos2_t corridor_mid_wp = {
+    .x = BOARD_MIN_X + 2500.0f,
+    .y = 850.0f,
+    .a = 0.0f,
 };
 
 pos2_t corridor_bottom_wp = {
     .x = BOARD_MIN_X + 2500.0f,
     .y = 300.0f,
-    .a = M_PI,
+    .a = 0.0f,
+};
+
+pos2_t pus_top_r_wp1 = {
+    .x = BOARD_MAX_X - ROBOT_DIST_TO_FLAT_SIZE - 10.0f,
+    .y = 850.0f,
+    .a = 0.0f,
+};
+
+pos2_t pus_top_r_wp2 = {
+    .x = BOARD_MAX_X - ROBOT_DIST_TO_FLAT_SIZE - 10.0f,
+    .y = 1600.0f,
+    .a = 0.0f,
 };
 
 pos2_t cursor_wp1 = {
     .x = CURSOR_START_X,
     .y = ROBOT_RADIUS + 50.0f,
-    .a = M_PI,
+    .a = 0.0f,
 };
 
 pos2_t cursor_wp2 = {
     .x = CURSOR_START_X,
     .y = ROBOT_RADIUS + 10.0f,
-    .a = M_PI,
+    .a = 0.0f,
 };
 
 pos2_t cursor_wp3 = {
     .x = CURSOR_END_X,
     .y = ROBOT_RADIUS + 10.0f,
-    .a = M_PI,
+    .a = 0.0f,
 };
 
 pos2_t cursor_wp4 = {
     .x = CURSOR_END_X,
     .y = ROBOT_RADIUS + 50.0f,
-    .a = M_PI,
+    .a = 0.0f,
 };
 
 struct point2 convert_point_for_team(enum pokprotocol_team color, struct point2 point)
@@ -199,42 +217,51 @@ int match(enum pokprotocol_team color)
 {
     // uint32_t match_start_time_ms =  k_uptime_get_32();
 
-    nav_set_pos(convert_pos_for_team(color, start_pos, 0.0f));
+    nav_set_pos(convert_pos_for_team_no_angle(color, start_pos, 0.0f));
     nav_set_brake(false);
 
     LOG_INF("Leaving start zone");
     uint32_t nav_events;
-    nav_go_to_direct(convert_pos_for_team(color, zone_exit_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, zone_exit_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, corridor_top_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
 
-    nav_go_to_direct(convert_pos_for_team(color, corridor_bottom_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_mid_wp, M_PI), K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, pus_top_r_wp1, M_PI), K_FOREVER);
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, pus_top_r_wp2, M_PI), K_FOREVER);
+    nav_wait_events(&nav_events);
+    k_sleep(K_FOREVER);
+    return 0;
+
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     LOG_INF("CURSOR");
-    nav_go_to_direct(convert_pos_for_team(color, cursor_wp1, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp1, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, cursor_wp2, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp2, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, cursor_wp3, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp3, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, cursor_wp4, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp4, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     LOG_INF("GO CORRIDOR");
 
-    nav_go_to_direct(convert_pos_for_team(color, corridor_bottom_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, corridor_top_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team(color, zone_exit_wp, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, zone_exit_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     LOG_INF("GO HOME");
 
-    nav_go_to_direct(convert_pos_for_team(color, end_pos, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     score += STRAT_END_GAME_IN_BACKSTAGE_SCORE;
