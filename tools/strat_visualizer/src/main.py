@@ -1,56 +1,28 @@
 #!/usr/bin/env python
+import logging
+import math
 import os
 
-from numpy.__config__ import show
-from numpy.typing import NDArray
-from shapely.geometry.base import BaseGeometry
-from shapely.lib import box
-
-import pygame as pg
-import threading
-import json
-import math
-import shutil
-import subprocess
-from msm import MqttSimMessengerServer, MqttSimMessengerNode
-import time
-import logging
 import numpy as np
-from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import unary_union
-from dataclasses import dataclass, field
+import pygame as pg
+from msm import MqttSimMessengerServer
+
+from io_utils import state_load, state_save
+from game_viz import GameZoneVisualizer
+from key_bindings import KeyBindings
+from layout import compute_layout
+from mqtt_sim import PoklegscomSim, PokirobotSim, pokirobot_builder
+from panels import (
+    InputsPanel, KeybindingsPanel, PlanPanel, SidePanel, SnapPanel, Sidebar,
+)
+from path_planner import PathPlanner
+from path_simulator import PathSimulator
+from preview import PreviewScreen
+from world import RobotObstacle, World
 
 logger = logging.getLogger("strat_visu")
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
-
-from constants import (
-    COLOR_DEEPBLACK, COLOR_BLACK, COLOR_RED, COLOR_YELLOW, COLOR_GREEN,
-    COLOR_GRAY, COLOR_PURPLE,
-    COLOR_TEAM_BLUE, COLOR_TEAM_YELLOW,
-    COLOR_WP, COLOR_WP_PENDING, COLOR_WP_HALO,
-    RIGHT_MARGIN_RATIO, SIDEBAR_BG, SIDEBAR_FG, SIDEBAR_DIM, SIDEBAR_ACCENT,
-)
-
-from world import (
-    Obstacle, CircleObstacle, RobotObstacle, Robot, World,
-    get_closest_collision_point,
-)
-from io_utils import copy_to_clipboard, state_load, state_save
-from key_bindings import KeyBindings, _key_name
-from mqtt_sim import (
-    SimProcess, SimPart, MqttSimMessengerNodeWithClbk,
-    PokuicomSim, PoklegscomSim, LidarSim, PokirobotSim, pokirobot_builder,
-)
-from game_viz import GameZoneVisualizer, load_image
-from path_simulator import PathSimulator
-from path_planner import PathPlanner
-from layout import compute_layout
-from panels import (
-    Panel, Slider, Sidebar,
-    SnapPanel, PlanPanel, KeybindingsPanel, InputsPanel, SidePanel,
-)
-from preview import PreviewScreen
 
 
 class PokibotGameVisualizer:
