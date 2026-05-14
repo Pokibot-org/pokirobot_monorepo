@@ -54,6 +54,8 @@ class PathSimulator:
     def reset(self, waypoints):
         self._load(waypoints)
         self.running = False
+        # Reset returns to the pre-start state so paths/waypoints render opaque.
+        self.started = False
         self._on_user_paused(False)
 
     def stop(self):
@@ -111,10 +113,9 @@ class PathSimulator:
 
         step_a = max(-self.angle_speed * dt, min(self.angle_speed * dt, delta_a))
         self.robot.pos = self.robot.pos + np.array([step_xy[0], step_xy[1], step_a])
-        if dist > self.pos_tol and float(np.linalg.norm(step_xy)) > 1e-3:
-            self.robot.dir = math.atan2(step_xy[1], step_xy[0])
-        else:
-            self.robot.dir = float(self.robot.pos[2])
+        # Holonomic robot: heading is independent of motion direction and rotates
+        # progressively toward the waypoint angle via step_a above.
+        self.robot.dir = float(self.robot.pos[2])
         if dist < self.pos_tol and abs(delta_a) < self.ang_tol:
             self.wp_index += 1
             self.robot.wps = self.wps[self.wp_index:]
