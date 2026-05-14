@@ -16,9 +16,11 @@ from mqtt_sim import PoklegscomSim, PokirobotSim, pokirobot_builder
 from panels import (
     InputsPanel, KeybindingsPanel, PlanPanel, Sidebar, SidePanel, SnapPanel,
 )
+from actions import normalize_actions_list
 from path_planner import PathPlanner
 from path_simulator import PathSimulator
 from preview import PreviewScreen
+from waypoint_modal import WaypointModal
 from world import RobotObstacle, World
 
 _main_dir = os.path.split(os.path.abspath(__file__))[0]
@@ -49,6 +51,7 @@ class PokibotGameVisualizer:
         self.plan_panel = None
         self._preview = None
         self._sidebar_capture = False
+        self._wp_modal = None
         self._state_path = None
         self._last_state_fp = None
 
@@ -92,6 +95,23 @@ class PokibotGameVisualizer:
     def _close_preview(self):
         self._preview = None
 
+    def _insert_relative(self, idx, before: bool):
+        if 0 <= idx < len(self.planner.waypoints):
+            x, y, a, _ = self.planner.waypoints[idx]
+            insert_idx = idx if before else idx + 1
+            self.planner.insert_waypoint(insert_idx, x, y, a, [])
+            self.planner.start_placing(insert_idx)
+
+    def _open_wp_modal(self, wp_index, anchor_screen_pos):
+        self._wp_modal = WaypointModal(
+            self.planner,
+            wp_index,
+            anchor_screen_pos,
+            on_close=lambda: setattr(self, "_wp_modal", None),
+            on_insert_before=lambda idx: self._insert_relative(idx, before=True),
+            on_insert_after=lambda idx: self._insert_relative(idx, before=False),
+        )
+
     def _toggle_side(self, new_side):
         if new_side == self.planner.side:
             return
@@ -119,6 +139,13 @@ class PokibotGameVisualizer:
         b.bind(pg.K_g, lambda: setattr(p, "grid_enabled", not p.grid_enabled), doc="toggle grid snap")
         b.bind(pg.K_t, lambda: setattr(p, "angle_enabled", not p.angle_enabled), doc="toggle angle snap")
         b.bind(pg.K_s, lambda: self._toggle_side("yellow" if p.side == "blue" else "blue"), doc="switch side")
+
+        def _delete_hovered():
+            idx = p._hovered_index()
+            if idx is not None:
+                p.delete_index(idx)
+        b.bind(pg.K_DELETE, _delete_hovered, doc="delete hovered waypoint")
+        b.bind(pg.K_BACKSPACE, _delete_hovered)
 
         b.bind(pg.K_o, lambda: self._adj_grid(-1))
         b.bind(pg.K_p, lambda: self._adj_grid(+1))
@@ -189,7 +216,13 @@ class PokibotGameVisualizer:
         loaded = state_load(self._state_path)
         if loaded is not None:
             self.planner.side = loaded.get("side", "blue")
-            self.planner.waypoints = [tuple(w) for w in loaded.get("waypoints", []) if len(w) == 3]
+            wps = []
+            for w in loaded.get("waypoints", []):
+                if len(w) == 3:
+                    wps.append((w[0], w[1], w[2], []))
+                elif len(w) == 4:
+                    wps.append((w[0], w[1], w[2], normalize_actions_list(w[3])))
+            self.planner.waypoints = wps
         self._last_state_fp = (self.planner.side, tuple(self.planner.waypoints))
 
     def _autosave_state(self):
@@ -222,6 +255,9 @@ class PokibotGameVisualizer:
         r = self._handle_window_event(e)
         if r is not None:
             return r
+        if self._wp_modal is not None:
+            self._wp_modal.handle_event(e)
+            return "consumed"
         if e.type == pg.MOUSEWHEEL:
             if not self._sidebar_capture and not self.planner.is_dragging():
                 self.planner.cycle_hover(-e.y)
@@ -242,6 +278,16 @@ class PokibotGameVisualizer:
             if e.type == pg.MOUSEBUTTONUP:
                 self._sidebar_capture = False
             return
+        if self.planner.is_placing():
+            wp = self.game_viz.screen_to_world(e.pos)
+            if e.type == pg.MOUSEMOTION:
+                self.planner.update_placing(wp)
+            elif e.type == pg.MOUSEBUTTONDOWN and e.button == 1:
+                self.planner.update_placing(wp)
+                self.planner.commit_placing()
+            elif e.type == pg.MOUSEBUTTONDOWN and e.button == 3:
+                self.planner.cancel_placing()
+            return
         if e.type == pg.MOUSEBUTTONDOWN and e.button == 1:
             wp = self.game_viz.screen_to_world(e.pos)
             if wp is not None:
@@ -259,10 +305,44 @@ class PokibotGameVisualizer:
             self.planner.set_hover(wp)
         elif e.type == pg.MOUSEBUTTONDOWN and e.button == 3:
             wp = self.game_viz.screen_to_world(e.pos)
-            if not self.planner.delete_at(wp):
+            hit = self.planner.find_index_near(wp) if wp is not None else None
+            if hit is not None:
+                self._open_wp_modal(hit, e.pos)
+            else:
                 self.planner.undo()
 
     # ---- drawing -----------------------------------------------------------
+
+    def _draw_action_toast(self):
+        result = self.simulator.get_active_action_progress()
+        if result is None:
+            return
+        label, frac = result
+        rp = self.simulator.robot.pos
+        rx, ry = self.game_viz.get_on_board_pos((rp[0], rp[1]))
+        try:
+            font = pg.font.SysFont("monospace", 14)
+        except Exception:
+            font = pg.font.Font(None, 16)
+        text_surf = font.render(label, True, (255, 255, 255))
+        pad_x, pad_y = 10, 4
+        toast_w = text_surf.get_width() + pad_x * 2
+        toast_h = 24
+        bar_h = 3
+        total_h = toast_h + bar_h
+        sw, sh = self.screen.get_size()
+        tx = rx - toast_w // 2
+        ty = ry - 40 - total_h
+        tx = max(4, min(tx, sw - toast_w - 4))
+        ty = max(4, min(ty, sh - total_h - 4))
+        bg = pg.Surface((toast_w, total_h), pg.SRCALPHA)
+        pg.draw.rect(bg, (10, 10, 14, 220), pg.Rect(0, 0, toast_w, toast_h), border_radius=6)
+        self.screen.blit(bg, (tx, ty))
+        self.screen.blit(text_surf, (tx + pad_x, ty + (toast_h - text_surf.get_height()) // 2))
+        bar_fill = int(toast_w * frac)
+        if bar_fill > 0:
+            pg.draw.rect(self.screen, (0xCF, 0xD1, 0x86),
+                         pg.Rect(tx, ty + toast_h, bar_fill, bar_h), border_radius=2)
 
     def _draw_frame(self):
         self.screen.fill(pg.Color(33, 33, 33))
@@ -280,6 +360,7 @@ class PokibotGameVisualizer:
             self.game_viz, self.screen,
             sim=self.simulator, mouse_screen_pos=pg.mouse.get_pos(),
         )
+        self._draw_action_toast()
 
     # ---- entry point -------------------------------------------------------
 
@@ -305,6 +386,8 @@ class PokibotGameVisualizer:
                         return
                 self.bindings.poll(pg.key.get_pressed())
                 self.sidebar.draw(self.screen)
+                if self._wp_modal is not None:
+                    self._wp_modal.draw(self.screen)
                 self._autosave_state()
             pg.display.update()
             self.clock.tick(60)

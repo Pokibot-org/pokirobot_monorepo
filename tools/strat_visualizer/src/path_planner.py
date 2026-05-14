@@ -8,14 +8,15 @@ import math
 
 import pygame as pg
 
-from constants import COLOR_WP, COLOR_WP_HALO, COLOR_WP_PENDING, SIDEBAR_DIM, SIDEBAR_FG
+from actions import format_action
+from constants import COLOR_WP, COLOR_WP_HALO, COLOR_WP_PENDING, SIDEBAR_ACCENT, SIDEBAR_DIM, SIDEBAR_FG
 
 
 class PathPlanner:
     HIT_RADIUS_MM = 80.0
 
     def __init__(self):
-        self.waypoints = []  # list of (x, y, angle)
+        self.waypoints = []  # list of (x, y, angle, [action_id, ...])
         self.side = "blue"
         # snap state
         self.grid_enabled = True
@@ -27,6 +28,9 @@ class PathPlanner:
         self._edit_index = None
         self._drag_start = None
         self._drag_current = None
+        # floating-placement state — a freshly-inserted wp follows the mouse
+        # until the user left-clicks (commit) or right-clicks (cancel).
+        self._placing_index = None
         # hover state — used for tooltip + cycling overlapped waypoints
         self._hover_world = None
         self._hover_indices = []  # all wps within HIT_RADIUS, sorted by distance
@@ -38,7 +42,52 @@ class PathPlanner:
 
     def mirror_y_axis(self):
         """Match convert_pos_for_team_no_angle: flip x, keep angle."""
-        self.waypoints = [(-x, y, a) for (x, y, a) in self.waypoints]
+        self.waypoints = [(-x, y, a, list(acts)) for (x, y, a, acts) in self.waypoints]
+
+    def get_actions(self, idx):
+        if 0 <= idx < len(self.waypoints):
+            return list(self.waypoints[idx][3])
+        return []
+
+    def set_actions(self, idx, actions):
+        if 0 <= idx < len(self.waypoints):
+            x, y, a, _ = self.waypoints[idx]
+            self.waypoints[idx] = (x, y, a, list(actions))
+
+    def insert_waypoint(self, idx, x, y, angle, actions=None):
+        self.waypoints.insert(idx, (x, y, angle, list(actions or [])))
+
+    def delete_index(self, idx):
+        if 0 <= idx < len(self.waypoints):
+            self.waypoints.pop(idx)
+            if self._placing_index is not None:
+                if idx == self._placing_index:
+                    self._placing_index = None
+                elif idx < self._placing_index:
+                    self._placing_index -= 1
+
+    def is_placing(self) -> bool:
+        return self._placing_index is not None
+
+    def start_placing(self, idx):
+        if 0 <= idx < len(self.waypoints):
+            self._placing_index = idx
+
+    def update_placing(self, world_pos):
+        if self._placing_index is None or world_pos is None:
+            return
+        x, y = self._snap_pos(world_pos)
+        _, _, a, acts = self.waypoints[self._placing_index]
+        self.waypoints[self._placing_index] = (x, y, a, acts)
+
+    def commit_placing(self):
+        self._placing_index = None
+
+    def cancel_placing(self):
+        if self._placing_index is None:
+            return
+        self.waypoints.pop(self._placing_index)
+        self._placing_index = None
 
     def _snap_pos(self, pos):
         if not self.grid_enabled or self.grid_size <= 0:
@@ -59,7 +108,7 @@ class PathPlanner:
         wx, wy = world_pos
         r2 = self.HIT_RADIUS_MM ** 2
         hits = []
-        for i, (x, y, _) in enumerate(self.waypoints):
+        for i, (x, y, _, _) in enumerate(self.waypoints):
             d2 = (x - wx) ** 2 + (y - wy) ** 2
             if d2 <= r2:
                 hits.append((d2, i))
@@ -127,14 +176,14 @@ class PathPlanner:
         self._drag_current = world_pos
         if self._mode == "move":
             x, y = self._snap_pos(world_pos)
-            _, _, a = self.waypoints[self._edit_index]
-            self.waypoints[self._edit_index] = (x, y, a)
+            _, _, a, acts = self.waypoints[self._edit_index]
+            self.waypoints[self._edit_index] = (x, y, a, acts)
         elif self._mode == "rotate":
-            x, y, _ = self.waypoints[self._edit_index]
+            x, y, _, acts = self.waypoints[self._edit_index]
             dx, dy = world_pos[0] - x, world_pos[1] - y
             if dx * dx + dy * dy >= 1.0:
                 a = self._snap_angle(math.atan2(dy, dx))
-                self.waypoints[self._edit_index] = (x, y, a)
+                self.waypoints[self._edit_index] = (x, y, a, acts)
 
     def end_drag(self, world_pos):
         if self._mode == "create" and self._drag_start is not None:
@@ -147,7 +196,7 @@ class PathPlanner:
                 angle = self.waypoints[-1][2] if self.waypoints else 0.0
             else:
                 angle = self._snap_angle(math.atan2(ey - sy, ex - sx))
-            self.waypoints.append((sx, sy, angle))
+            self.waypoints.append((sx, sy, angle, []))
         self._mode = None
         self._edit_index = None
         self._drag_start = None
@@ -178,18 +227,22 @@ class PathPlanner:
     # ---- export -------------------------------------------------------------
 
     def to_c_string(self) -> str:
-        """Self-contained one-liner per waypoint — paste any line into match().
-        Each line uses a compound literal so it does not depend on prior declarations.
-        Insert actuator calls (pokarm_pinch(true); etc.) between lines."""
+        """Self-contained one-liner per waypoint; action comments follow each line."""
         if not self.waypoints:
             return "// no waypoints\n"
         lines = []
-        for i, (x, y, a) in enumerate(self.waypoints, start=1):
+        for i, (x, y, a, acts) in enumerate(self.waypoints, start=1):
             lines.append(
                 f"nav_go_to_direct(convert_pos_for_team_no_angle(color, "
                 f"(pos2_t){{.x = {x:.3f}f, .y = {y:.3f}f, .a = {a:.6f}f}}, 0.0f), K_FOREVER); "
                 f"nav_wait_events(&nav_events); // step {i}"
             )
+            for aid, args in acts:
+                if args:
+                    arg_str = " ".join(f"{k}={v}" for k, v in args.items())
+                    lines.append(f"// action: {aid} {arg_str}")
+                else:
+                    lines.append(f"// action: {aid}")
         return "\n".join(lines) + "\n"
 
     def export(self, path):
@@ -288,7 +341,7 @@ class PathPlanner:
         overlay.set_alpha(alpha)
         screen.blit(overlay, (x0, y0))
 
-    def _draw_marker(self, screen, sp, color, label_text, font):
+    def _draw_marker(self, screen, sp, color, label_text, font, action_count=0):
         outer_r = 13
         inner_r = 9
         pg.draw.circle(screen, COLOR_WP_HALO, (sp[0] + 1, sp[1] + 2), outer_r + 2)
@@ -298,28 +351,42 @@ class PathPlanner:
         if label_text:
             label = font.render(label_text, True, COLOR_WP_HALO)
             screen.blit(label, (sp[0] - label.get_width() // 2, sp[1] - label.get_height() // 2))
+        if action_count > 0:
+            badge_r = 7
+            bx = sp[0] + outer_r - 1
+            by = sp[1] - outer_r + 1
+            pg.draw.circle(screen, SIDEBAR_ACCENT, (bx, by), badge_r)
+            digit = font.render(str(action_count), True, (20, 20, 20))
+            screen.blit(digit, (bx - digit.get_width() // 2, by - digit.get_height() // 2))
 
-    def _draw_marker_alpha(self, screen, sp, color, label_text, font, alpha):
+    def _draw_marker_alpha(self, screen, sp, color, label_text, font, alpha, action_count=0):
         if alpha >= 255:
-            self._draw_marker(screen, sp, color, label_text, font)
+            self._draw_marker(screen, sp, color, label_text, font, action_count)
             return
         outer_r = 13
-        pad = outer_r + 6
+        pad = outer_r + 10
         size = pad * 2
         overlay = pg.Surface((size, size), pg.SRCALPHA)
-        self._draw_marker(overlay, (pad, pad), color, label_text, font)
+        self._draw_marker(overlay, (pad, pad), color, label_text, font, action_count)
         overlay.set_alpha(alpha)
         screen.blit(overlay, (sp[0] - pad, sp[1] - pad))
 
     def _draw_hover_tooltip(self, screen, font, idx, mouse_screen_pos):
         if idx >= len(self.waypoints):
             return
-        x, y, a = self.waypoints[idx]
+        x, y, a, acts = self.waypoints[idx]
         a_deg = math.degrees(a)
         lines = [
             f"#{idx + 1}  x={x:.0f}  y={y:.0f}",
             f"a={a:.3f} rad ({a_deg:.1f}°)",
         ]
+        if acts:
+            if len(acts) <= 3:
+                labels = ", ".join(format_action(aid, args) for (aid, args) in acts)
+            else:
+                labels = ", ".join(format_action(aid, args) for (aid, args) in acts[:2])
+                labels += f", +{len(acts) - 2} more"
+            lines.append(f"actions: {labels}")
         if len(self._hover_indices) > 1:
             pos = (self._hover_cycle % len(self._hover_indices)) + 1
             lines.append(f"overlap {pos}/{len(self._hover_indices)} — scroll to cycle")
@@ -392,7 +459,7 @@ class PathPlanner:
 
         hovered = self._hovered_index()
 
-        sps = [game_viz.get_on_board_pos((x, y)) for (x, y, _) in self.waypoints]
+        sps = [game_viz.get_on_board_pos((x, y)) for (x, y, _, _) in self.waypoints]
         wp_alpha = [self._alpha_for(i, sim) for i in range(len(self.waypoints))]
         wp_color = [self._color_for(i, sim) for i in range(len(self.waypoints))]
 
@@ -405,7 +472,7 @@ class PathPlanner:
                         continue
                     color = wp_color[i] if wp_alpha[i] >= wp_alpha[i + 1] else wp_color[i + 1]
                     self._draw_segment_alpha(screen, sps[i], sps[i + 1], alpha, color)
-            for i, (x, y, a) in enumerate(self.waypoints):
+            for i, (x, y, a, _acts) in enumerate(self.waypoints):
                 alpha = wp_alpha[i]
                 if (alpha >= 255) != opaque_pass:
                     continue
@@ -413,12 +480,13 @@ class PathPlanner:
                 tip = game_viz.get_on_board_pos((x + arrow_len_world * math.cos(a),
                                                  y + arrow_len_world * math.sin(a)))
                 self._draw_arrow_alpha(screen, sp, tip, wp_color[i], alpha)
-            for i, (x, y, a) in enumerate(self.waypoints):
+            for i, (x, y, a, acts) in enumerate(self.waypoints):
                 alpha = wp_alpha[i]
                 if (alpha >= 255) != opaque_pass:
                     continue
                 color = COLOR_WP_PENDING if i == hovered else wp_color[i]
-                self._draw_marker_alpha(screen, sps[i], color, str(i + 1), font, alpha)
+                self._draw_marker_alpha(screen, sps[i], color, str(i + 1), font, alpha,
+                                        action_count=len(acts))
 
         pending = self.pending()
         if pending is not None:

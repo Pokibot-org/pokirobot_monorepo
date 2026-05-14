@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from actions import format_action
 from world import Robot, World
 
 
@@ -15,6 +16,7 @@ class PathSimulator:
         self.planner = planner
         self.robot = Robot(team=0)
         self.wps = []
+        self.wp_actions = []
         self.wp_index = 0
         self.started = False
         self.running = False
@@ -23,6 +25,10 @@ class PathSimulator:
         self.pos_tol = 5.0  # mm
         self.ang_tol = 0.02  # rad
         self._on_user_paused = on_user_running or (lambda running: None)
+        self.action_duration = 0.8
+        self.current_action = None
+        self._action_queue = []
+        self._action_elapsed = 0.0
 
     def _sync_team(self):
         if self.planner is not None:
@@ -32,7 +38,8 @@ class PathSimulator:
         if not waypoints:
             return False
         self._sync_team()
-        self.wps = [np.array([x, y, a], dtype=float) for (x, y, a) in waypoints]
+        self.wps = [np.array([x, y, a], dtype=float) for (x, y, a, _acts) in waypoints]
+        self.wp_actions = [list(acts) for (_x, _y, _a, acts) in waypoints]
         first = self.wps[0]
         self.robot.pos = np.array([first[0], first[1], first[2]], dtype=float)
         self.robot.dir = first[2]
@@ -90,8 +97,25 @@ class PathSimulator:
             cmd = cmd / mag * self.speed
         return cmd
 
+    def get_active_action_progress(self):
+        if self.current_action is None:
+            return None
+        frac = min(1.0, self._action_elapsed / self.action_duration) if self.action_duration > 0 else 1.0
+        return (self.current_action, frac)
+
     def step(self, dt):
         self._sync_team()
+        if self.current_action is not None:
+            self._action_elapsed += dt
+            if self._action_elapsed >= self.action_duration:
+                if self._action_queue:
+                    aid, args = self._action_queue.pop(0)
+                    self.current_action = format_action(aid, args)
+                    self._action_elapsed = 0.0
+                else:
+                    self.current_action = None
+                    self._action_elapsed = 0.0
+            return
         if not self.running or self.wp_index >= len(self.wps):
             self.running = False
             return
@@ -117,7 +141,13 @@ class PathSimulator:
         # progressively toward the waypoint angle via step_a above.
         self.robot.dir = float(self.robot.pos[2])
         if dist < self.pos_tol and abs(delta_a) < self.ang_tol:
+            arrived_actions = list(self.wp_actions[self.wp_index])
             self.wp_index += 1
             self.robot.wps = self.wps[self.wp_index:]
+            if arrived_actions:
+                self._action_queue = arrived_actions[1:]
+                aid, args = arrived_actions[0]
+                self.current_action = format_action(aid, args)
+                self._action_elapsed = 0.0
             if self.wp_index >= len(self.wps):
                 self.running = False

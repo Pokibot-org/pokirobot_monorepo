@@ -44,7 +44,10 @@ def state_save(path: str, side: str, waypoints):
         with open(path, "w") as f:
             json.dump({
                 "side": side,
-                "waypoints": [[x, y, a] for (x, y, a) in waypoints],
+                "waypoints": [
+                    [x, y, a, [[aid, dict(args)] for (aid, args) in acts]]
+                    for (x, y, a, acts) in waypoints
+                ],
             }, f, indent=2)
     except Exception as exc:
         logger.warning(f"state save failed: {exc}")

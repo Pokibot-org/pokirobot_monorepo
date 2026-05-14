@@ -150,6 +150,10 @@ class PlanPanel(Panel):
     title = "Path planner"
     min_width = 240  # four buttons (Export/Play/Reset/Clear) need horizontal room
 
+    _DUR_MIN = 0.2
+    _DUR_MAX = 3.0
+    _DUR_STEP = 0.1
+
     def __init__(self, planner, simulator, on_preview):
         self.planner = planner
         self.simulator = simulator
@@ -158,6 +162,8 @@ class PlanPanel(Panel):
         self.btn_h = 28
         self.status = ""
         self._buttons = []
+        self._dur_minus_rect = pg.Rect(0, 0, 0, 0)
+        self._dur_plus_rect = pg.Rect(0, 0, 0, 0)
 
     def _do_export(self):
         text = self.planner.to_c_string()
@@ -170,8 +176,12 @@ class PlanPanel(Panel):
     def _reset_sim(self):
         self.simulator.reset(self.planner.waypoints)
 
+    def _adj_action_duration(self, delta):
+        v = self.simulator.action_duration + delta * self._DUR_STEP
+        self.simulator.action_duration = round(max(self._DUR_MIN, min(self._DUR_MAX, v)), 1)
+
     def get_height(self, width, font):
-        return self.row_h * 4 + self.btn_h + 12
+        return self.row_h * 5 + self.btn_h + 12
 
     def draw(self, surface, rect, font):
         x, y, w, _ = rect
@@ -194,6 +204,23 @@ class PlanPanel(Panel):
             surface.blit(status_surf, (x, y))
         y += self.row_h
 
+        dur_label = font.render("action dur:", True, SIDEBAR_DIM)
+        surface.blit(dur_label, (x, y + 2))
+        btn_sz = 18
+        minus_x = x + w - btn_sz * 2 - 34
+        plus_x = x + w - btn_sz - 2
+        val_x = x + w - btn_sz * 2 - 36
+        val_surf = font.render(f"{self.simulator.action_duration:.1f}s", True, SIDEBAR_FG)
+        surface.blit(val_surf, (val_x - val_surf.get_width(), y + 2))
+        self._dur_minus_rect = pg.Rect(minus_x, y, btn_sz, btn_sz)
+        self._dur_plus_rect = pg.Rect(plus_x, y, btn_sz, btn_sz)
+        for brect, lbl in ((self._dur_minus_rect, "-"), (self._dur_plus_rect, "+")):
+            pg.draw.rect(surface, COLOR_GRAY, brect, border_radius=3)
+            pg.draw.rect(surface, SIDEBAR_DIM, brect, width=1, border_radius=3)
+            ts = font.render(lbl, True, SIDEBAR_FG)
+            surface.blit(ts, (brect.centerx - ts.get_width() // 2, brect.centery - ts.get_height() // 2))
+        y += self.row_h
+
         sim_label = "Pause" if self.simulator.running else "Play"
         labels = [("Export", self._do_export), (sim_label, self._play_pause),
                   ("Reset", self._reset_sim), ("Clear", self.planner.clear)]
@@ -210,6 +237,12 @@ class PlanPanel(Panel):
     def handle_event(self, event, rect) -> bool:
         if event.type != pg.MOUSEBUTTONDOWN or event.button != 1:
             return False
+        if self._dur_minus_rect.collidepoint(event.pos):
+            self._adj_action_duration(-1)
+            return True
+        if self._dur_plus_rect.collidepoint(event.pos):
+            self._adj_action_duration(+1)
+            return True
         for br, _label, cb in self._buttons:
             if br.collidepoint(event.pos):
                 cb()
