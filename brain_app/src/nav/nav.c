@@ -398,13 +398,12 @@ static bool is_obstacled_too_close(float angle_dist, float distance)
 {
     if (distance > LIDAR_STOP_DISTANCE_MAX) {
         return false;
-    } else {
-        return true;
     }
-    // float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
-    //                    (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
-    // float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
-    // return angle_dist < test_angle / 2;
+
+    float ratio = MAX(distance - LIDAR_STOP_DISTANCE_MIN, 0.0f) /
+                       (LIDAR_STOP_DISTANCE_MAX - LIDAR_STOP_DISTANCE_MIN);
+    float test_angle = ratio * LIDAR_STOP_ANGLE_START + (1.0f - ratio) * LIDAR_STOP_ANGLE_END;
+    return angle_dist < test_angle / 2;
 }
 
 void log_lidar_point(const struct lidar_point *point)
