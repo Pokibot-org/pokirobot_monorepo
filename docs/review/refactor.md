@@ -1,33 +1,25 @@
 # strat_visualizer refactor suggestions
 
-Observations from reading `tools/strat_visualizer/src/main.py` end-to-end after
-the simulation pause / overlap-aware hover / gradient path / robot art / masonry
-sidebar rounds. None are urgent — these are cleanups, not bug fixes.
+Observations from reading the strat_visualizer module after the
+simulation pause / overlap-aware hover / gradient path / robot art / masonry
+sidebar / file-split rounds. None are urgent — these are cleanups, not bug
+fixes.
 
-## 1. `PokibotGameVisualizer.run()` is doing too much
+## 1. ~~`PokibotGameVisualizer.run()` is doing too much~~ — DONE
 
-Long single method that constructs planner, simulator, panels, key bindings,
-state persistence, two event loops (preview vs main), per-frame autosave, and
-all draw orchestration. A minimal split:
+`run()` was split into `_build_ui`, `_build_bindings`, `_build_inputs_panel`,
+`_load_state`, `_autosave_state`, `_handle_window_event`,
+`_handle_preview_event`, `_handle_event`, `_handle_mouse_event`,
+`_draw_frame`, and `_loop`. Action closures became real methods
+(`_toggle_wps`, `_move_obstacle`, …). The whole file was also split out of
+`main.py` into `app.py`, `path_planner.py`, `path_simulator.py`, `panels.py`,
+`preview.py`, `game_viz.py`, `key_bindings.py`, `layout.py`, `mqtt_sim.py`,
+`io_utils.py`, `world.py`, `constants.py`. `main.py` is now 10 lines.
 
-- `_build_ui()` — construct planner, simulator, panels, sidebar, key bindings.
-- `_handle_event(e)` — dispatch one pygame event.
-- `_draw(viewport)` — per-frame rendering.
-- `run()` — just the outer loop.
+## 2. ~~Two near-identical event loops~~ — DONE
 
-Each unit is independently testable.
-
-## 2. Two near-identical event loops (main + preview overlay)
-
-Both branches reimplement `pg.QUIT` / `pg.VIDEORESIZE` handling and most of
-the window-management surface. Hoist into:
-
-```python
-def _handle_window_event(self, e) -> str | None:
-    # returns "quit", "consumed", or None
-```
-
-Both loops call it first.
+Both loops now share `_handle_window_event(e) -> "quit" | "consumed" | None`,
+and each has its own `_handle_event` / `_handle_preview_event` wrapper.
 
 ## 3. `PathSimulator` and `PoklegscomSim` duplicate waypoint-following kinematics
 
@@ -93,21 +85,15 @@ No throttling. Cheap today, but it'll hurt as more state is added. Options:
 - Debounce: write at most every N seconds.
 - Save only on `pg.QUIT`.
 
-## 9. Dead / dubious imports
+## 9. ~~Dead / dubious imports~~ — DONE
 
-```python
-from numpy.__config__ import show     # unused
-from shapely.lib import box           # unused, reaches into private module
-```
+Removed during the file-split: `numpy.__config__.show`, `shapely.lib.box`,
+along with the now-unused `threading`, `shutil`, `subprocess`, `time`,
+`dataclass`, `json`, `LineString`, `Polygon`, `unary_union` from `main.py`.
 
-Both look like accidental auto-imports. Drop them. (Still present at the top
-of `main.py`.)
+## 10. ~~Main loop reaches into `PathPlanner._mode`~~ — DONE
 
-## 10. Main loop reaches into `PathPlanner._mode`
-
-The mouse handler in `PokibotGameVisualizer.run` checks `planner._mode is None`
-to decide between "set hover" and "update drag". Expose an `is_dragging()` (or
-`is_editing()`) accessor instead so the private state stays private.
+`PathPlanner.is_dragging()` exists; all main-loop call sites use it.
 
 ## 11. Hover identity uses exact tuple equality
 
