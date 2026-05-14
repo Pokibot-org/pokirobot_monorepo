@@ -1116,6 +1116,9 @@ def _key_name(key):
 
 class Panel:
     title: str = ""
+    # Minimum column width (in px) this panel needs to render reasonably.
+    # The sidebar caps n_cols so this constraint is always honored.
+    min_width: int = 200
 
     def get_height(self, width: int, font: "pg.font.Font") -> int:
         raise NotImplementedError
@@ -1245,6 +1248,7 @@ class SnapPanel(Panel):
 
 class PlanPanel(Panel):
     title = "Path planner"
+    min_width = 240  # four buttons (Export/Play/Reset/Clear) need horizontal room
 
     def __init__(self, planner: "PathPlanner", simulator: "PathSimulator", on_preview):
         self.planner = planner
@@ -1365,14 +1369,26 @@ class InputsPanel(Panel):
             y += self.row_h
 
 
-def compute_layout(screen_size):
-    """Return (viewport_rect, sidebar_rect, orientation) — orientation is 'right' or 'bottom'."""
+def compute_layout(screen_size, bg_ratio):
+    """Return (viewport_rect, sidebar_rect, orientation).
+
+    In portrait mode the field can only occupy `w × (w / bg_ratio)`, so the
+    leftover vertical space is folded into the sidebar (instead of wasted as
+    black margin above/below the field). Sidebar gets at least RIGHT_MARGIN_RATIO
+    of the screen so it doesn't collapse on near-square windows.
+    """
     w, h = screen_size
     if h > w:
-        sb_h = int(h * RIGHT_MARGIN_RATIO)
-        return (0, 0, w, h - sb_h), (0, h - sb_h, w, sb_h), "bottom"
-    sb_w = int(w * RIGHT_MARGIN_RATIO)
-    return (0, 0, w - sb_w, h), (w - sb_w, 0, sb_w, h), "right"
+        min_sb_h = int(h * RIGHT_MARGIN_RATIO)
+        field_h = int(w / bg_ratio)
+        vp_h = min(field_h, h - min_sb_h)
+        sb_h = h - vp_h
+        return (0, 0, w, vp_h), (0, vp_h, w, sb_h), "bottom"
+    min_sb_w = int(w * RIGHT_MARGIN_RATIO)
+    field_w = int(h * bg_ratio)
+    vp_w = min(field_w, w - min_sb_w)
+    sb_w = w - vp_w
+    return (0, 0, vp_w, h), (vp_w, 0, sb_w, h), "right"
 
 
 class Sidebar:
@@ -1414,16 +1430,21 @@ class Sidebar:
                 panel.draw(screen, prect, self._font)
                 self._panel_rects.append((panel, prect))
                 cy += ph + self.gap
-        else:  # bottom: columns left-to-right
-            n = len(self.panels)
-            inner_h = h - 2 * self.padding
-            col_w = (w - 2 * self.padding - self.gap * (n - 1)) // n
-            cx = x + self.padding
+        else:  # bottom: masonry — flow panels into the shortest column
+            inner_w = w - 2 * self.padding
+            min_col_w = max(p.min_width for p in self.panels)
+            n_cols = max(1, min(len(self.panels),
+                                (inner_w + self.gap) // (min_col_w + self.gap)))
+            col_w = (inner_w - self.gap * (n_cols - 1)) // n_cols
+            col_y = [y + self.padding] * n_cols
             for panel in self.panels:
-                prect = (cx, y + self.padding, col_w, inner_h)
+                c = min(range(n_cols), key=lambda i: col_y[i])
+                ph = panel.get_height(col_w, self._font)
+                cx = x + self.padding + c * (col_w + self.gap)
+                prect = (cx, col_y[c], col_w, ph)
                 panel.draw(screen, prect, self._font)
                 self._panel_rects.append((panel, prect))
-                cx += col_w + self.gap
+                col_y[c] += ph + self.gap
 
     def handle_event(self, event) -> bool:
         for panel, prect in self._panel_rects:
@@ -1740,7 +1761,7 @@ class PokibotGameVisualizer:
                 clock.tick(60)
                 continue
 
-            viewport, sb_rect, orientation = compute_layout(screen.get_size())
+            viewport, sb_rect, orientation = compute_layout(screen.get_size(), game_viz.bg_ratio)
             sidebar.set_rect(sb_rect, orientation)
 
             simulator.step(sim_dt)
