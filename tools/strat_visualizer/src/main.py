@@ -500,31 +500,52 @@ def copy_to_clipboard(text: str) -> str:
 class PathSimulator:
     PREVIEW_KEY = "sim_preview"
 
-    def __init__(self, world: World):
+    def __init__(self, world: World, planner=None):
         self.world = world
+        self.planner = planner
         self.robot = Robot(team=0)
         self.wps = []
         self.wp_index = 0
+        self.started = False
         self.running = False
         self.speed = 500.0  # mm/s
         self.angle_speed = math.pi / 2  # rad/s
         self.pos_tol = 5.0  # mm
         self.ang_tol = 0.02  # rad
 
-    def start(self, waypoints):
+    def _sync_team(self):
+        if self.planner is not None:
+            self.robot.team = 1 if self.planner.side == "yellow" else 0
+
+    def _load(self, waypoints):
         if not waypoints:
-            return
+            return False
+        self._sync_team()
         self.wps = [np.array([x, y, a], dtype=float) for (x, y, a) in waypoints]
         first = self.wps[0]
         self.robot.pos = np.array([first[0], first[1], first[2]], dtype=float)
         self.robot.dir = first[2]
         self.robot.wps = self.wps[:]
         self.wp_index = 1 if len(self.wps) > 1 else len(self.wps)
-        self.running = self.wp_index < len(self.wps)
         self.world.robots[self.PREVIEW_KEY] = self.robot
+        self.started = True
+        return True
+
+    def play_pause(self, waypoints):
+        if not self.started or self.wp_index >= len(self.wps):
+            if not self._load(waypoints):
+                return
+            self.running = self.wp_index < len(self.wps)
+        else:
+            self.running = not self.running
+
+    def reset(self, waypoints):
+        self._load(waypoints)
+        self.running = False
 
     def stop(self):
         self.running = False
+        self.started = False
         self.world.robots.pop(self.PREVIEW_KEY, None)
 
     def _avoidance_velocity(self, desired_dir, dist_to_target):
@@ -555,6 +576,7 @@ class PathSimulator:
         return cmd
 
     def step(self, dt):
+        self._sync_team()
         if not self.running or self.wp_index >= len(self.wps):
             self.running = False
             return
@@ -610,8 +632,8 @@ class PathPlanner:
         return (a + math.pi) % (2 * math.pi) - math.pi
 
     def mirror_y_axis(self):
-        """Vertical-axis symmetry: (x, y, a) -> (-x, y, pi - a)."""
-        self.waypoints = [(-x, y, self._wrap_angle(math.pi - a)) for (x, y, a) in self.waypoints]
+        """Match convert_pos_for_team_no_angle: flip x, keep angle."""
+        self.waypoints = [(-x, y, a) for (x, y, a) in self.waypoints]
 
     def _snap_pos(self, pos):
         if not self.grid_enabled or self.grid_size <= 0:
@@ -720,10 +742,9 @@ class PathPlanner:
         lines = []
         for i, (x, y, a) in enumerate(self.waypoints, start=1):
             lines.append(
-                f"// step {i}\n"
                 f"nav_go_to_direct(convert_pos_for_team_no_angle(color, "
                 f"(pos2_t){{.x = {x:.3f}f, .y = {y:.3f}f, .a = {a:.6f}f}}, 0.0f), K_FOREVER); "
-                f"nav_wait_events(&nav_events);"
+                f"nav_wait_events(&nav_events); // step {i}"
             )
         return "\n".join(lines) + "\n"
 
@@ -1010,11 +1031,11 @@ class PlanPanel(Panel):
         self.on_preview(text)
         self.status = "preview opened"
 
-    def _toggle_simulate(self):
-        if self.simulator.running:
-            self.simulator.stop()
-        else:
-            self.simulator.start(self.planner.waypoints)
+    def _play_pause(self):
+        self.simulator.play_pause(self.planner.waypoints)
+
+    def _reset_sim(self):
+        self.simulator.reset(self.planner.waypoints)
 
     def get_height(self, width, font):
         return self.row_h * 4 + self.btn_h + 12
@@ -1040,9 +1061,9 @@ class PlanPanel(Panel):
             surface.blit(status_surf, (x, y))
         y += self.row_h
 
-        sim_label = "Stop" if self.simulator.running else "Simulate"
-        labels = [("Export", self._do_export), (sim_label, self._toggle_simulate),
-                  ("Undo", self.planner.undo), ("Clear", self.planner.clear)]
+        sim_label = "Pause" if self.simulator.running else "Play"
+        labels = [("Export", self._do_export), (sim_label, self._play_pause),
+                  ("Reset", self._reset_sim), ("Clear", self.planner.clear)]
         btn_w = (w - 8) // len(labels)
         for i, (label, cb) in enumerate(labels):
             bx = x + i * (btn_w + 4)
@@ -1206,7 +1227,7 @@ class SidePanel(Panel):
         title = font.render(self.title, True, SIDEBAR_ACCENT)
         surface.blit(title, (x, y))
         y += self.row_h
-        items = [("blue", COLOR_TEAM_BLUE), ("yellow", COLOR_TEAM_YELLOW)]
+        items = [("yellow", COLOR_TEAM_YELLOW), ("blue", COLOR_TEAM_BLUE)]
         bw = (w - 8) // 2
         for i, (val, color) in enumerate(items):
             br = pg.Rect(x + i * (bw + 8), y, bw, self.btn_h)
@@ -1385,7 +1406,8 @@ class PokibotGameVisualizer:
         bindings.register(pg.K_z, "undo waypoint", planner.undo)
         bindings.register(pg.K_x, "clear path", planner.clear)
         bindings.register(pg.K_c, "open code preview", lambda: open_preview(planner.to_c_string()))
-        bindings.register(pg.K_SPACE, "toggle simulation", lambda: plan_panel._toggle_simulate())
+        bindings.register(pg.K_SPACE, "sim play/pause", lambda: plan_panel._play_pause())
+        bindings.register(pg.K_ESCAPE, "sim reset", lambda: plan_panel._reset_sim())
         bindings.register(pg.K_g, "toggle grid snap", lambda: setattr(planner, "grid_enabled", not planner.grid_enabled))
         bindings.register(pg.K_t, "toggle angle snap", lambda: setattr(planner, "angle_enabled", not planner.angle_enabled))
         bindings.register(pg.K_MINUS, "grid size prev", lambda: adj_grid(-1))
@@ -1427,7 +1449,7 @@ class PokibotGameVisualizer:
             ("wps", fmt_wps_visible),
         ])
 
-        simulator = PathSimulator(self.world)
+        simulator = PathSimulator(self.world, planner)
 
         preview_ref = [None]  # list-as-cell for mutation from closures
 
@@ -1470,7 +1492,7 @@ class PokibotGameVisualizer:
                     if e.type == pg.QUIT:
                         return
                     if e.type == pg.VIDEORESIZE:
-                        screen = pg.display.set_mode((e.w, e.h), pg.RESIZABLE)
+                        screen = pg.display.get_surface()
                         game_viz.screen = screen
                         continue
                     preview_ref[0].handle_event(e)
@@ -1492,7 +1514,7 @@ class PokibotGameVisualizer:
                 if e.type == pg.QUIT:
                     return
                 if e.type == pg.VIDEORESIZE:
-                    screen = pg.display.set_mode((e.w, e.h), pg.RESIZABLE)
+                    screen = pg.display.get_surface()
                     game_viz.screen = screen
                     continue
                 if e.type in (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP, pg.MOUSEMOTION):
