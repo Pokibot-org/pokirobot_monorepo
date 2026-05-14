@@ -527,6 +527,33 @@ class PathSimulator:
         self.running = False
         self.world.robots.pop(self.PREVIEW_KEY, None)
 
+    def _avoidance_velocity(self, desired_dir, dist_to_target):
+        """Potential-field steering. desired_dir is a unit vector toward the target."""
+        influence = 350.0  # mm — start reacting at this clearance
+        k_rep = 800.0
+        cmd = desired_dir * self.speed
+        rp = self.robot.pos[:2]
+        for obs in list(self.world.obstacles.values()):
+            try:
+                op = np.array(obs.get_pos()[:2], dtype=float)
+            except Exception:
+                continue
+            obs_r = float(getattr(obs, "radius", 100.0))
+            diff = rp - op
+            d = float(np.linalg.norm(diff))
+            clearance = d - obs_r - self.robot.radius
+            if d < 1e-3 or clearance > influence:
+                continue
+            # smooth, asymptotic repulsion as clearance shrinks toward 0
+            c = max(clearance, 5.0)
+            strength = k_rep * (1.0 / c - 1.0 / influence)
+            cmd = cmd + (diff / d) * strength * self.speed
+        # cap magnitude to nominal speed
+        mag = float(np.linalg.norm(cmd))
+        if mag > self.speed:
+            cmd = cmd / mag * self.speed
+        return cmd
+
     def step(self, dt):
         if not self.running or self.wp_index >= len(self.wps):
             self.running = False
@@ -536,14 +563,22 @@ class PathSimulator:
         delta_xy = delta[:2]
         delta_a = (float(delta[2]) + math.pi) % (2 * math.pi) - math.pi
         dist = float(np.linalg.norm(delta_xy))
-        if dist > 1e-6:
-            step_xy = delta_xy / dist * min(dist, self.speed * dt)
+
+        if dist > self.pos_tol:
+            desired_dir = delta_xy / dist
+            vel = self._avoidance_velocity(desired_dir, dist)
+            step_xy = vel * dt
+            # do not overshoot when close to target
+            step_dist = float(np.linalg.norm(step_xy))
+            if step_dist > dist:
+                step_xy = step_xy / step_dist * dist
         else:
             step_xy = np.zeros(2)
+
         step_a = max(-self.angle_speed * dt, min(self.angle_speed * dt, delta_a))
         self.robot.pos = self.robot.pos + np.array([step_xy[0], step_xy[1], step_a])
-        if dist > self.pos_tol:
-            self.robot.dir = math.atan2(delta_xy[1], delta_xy[0])
+        if dist > self.pos_tol and float(np.linalg.norm(step_xy)) > 1e-3:
+            self.robot.dir = math.atan2(step_xy[1], step_xy[0])
         else:
             self.robot.dir = float(self.robot.pos[2])
         if dist < self.pos_tol and abs(delta_a) < self.ang_tol:
@@ -558,9 +593,10 @@ class PathPlanner:
 
     def __init__(self):
         self.waypoints = []  # list of (x, y, angle)
+        self.side = "blue"
         # snap state
         self.grid_enabled = True
-        self.grid_size = 100.0  # mm
+        self.grid_size = 50.0  # mm
         self.angle_enabled = True
         self.angle_step = math.pi / 4  # 45deg
         # drag state
@@ -568,6 +604,14 @@ class PathPlanner:
         self._edit_index = None
         self._drag_start = None
         self._drag_current = None
+
+    @staticmethod
+    def _wrap_angle(a):
+        return (a + math.pi) % (2 * math.pi) - math.pi
+
+    def mirror_y_axis(self):
+        """Vertical-axis symmetry: (x, y, a) -> (-x, y, pi - a)."""
+        self.waypoints = [(-x, y, self._wrap_angle(math.pi - a)) for (x, y, a) in self.waypoints]
 
     def _snap_pos(self, pos):
         if not self.grid_enabled or self.grid_size <= 0:
@@ -667,10 +711,26 @@ class PathPlanner:
             return (sx, sy, 0.0)
         return (sx, sy, self._snap_angle(math.atan2(ey - sy, ex - sx)))
 
+    def to_c_string(self) -> str:
+        """Self-contained one-liner per waypoint — paste any line into match().
+        Each line uses a compound literal so it does not depend on prior declarations.
+        Insert actuator calls (pokarm_pinch(true); etc.) between lines."""
+        if not self.waypoints:
+            return "// no waypoints\n"
+        lines = []
+        for i, (x, y, a) in enumerate(self.waypoints, start=1):
+            lines.append(
+                f"// step {i}\n"
+                f"nav_go_to_direct(convert_pos_for_team_no_angle(color, "
+                f"(pos2_t){{.x = {x:.3f}f, .y = {y:.3f}f, .a = {a:.6f}f}}, 0.0f), K_FOREVER); "
+                f"nav_wait_events(&nav_events);"
+            )
+        return "\n".join(lines) + "\n"
+
     def export(self, path):
-        data = [{"x": x, "y": y, "a": a} for (x, y, a) in self.waypoints]
+        text = self.to_c_string()
         with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+            f.write(text)
         return path
 
     def draw_grid(self, game_viz, screen):
@@ -868,7 +928,13 @@ class SnapPanel(Panel):
     def __init__(self, planner: "PathPlanner"):
         self.planner = planner
         self.row_h = 26
-        self.grid_slider = Slider(10, 500, planner.grid_size, step=10, fmt=lambda v: f"{int(v)} mm")
+        self.GRID_OPTIONS = [25.0, 50.0, 100.0]
+        try:
+            init_idx = self.GRID_OPTIONS.index(planner.grid_size)
+        except ValueError:
+            init_idx = 1
+        self.grid_slider = Slider(0, len(self.GRID_OPTIONS) - 1, init_idx, step=1,
+                                  fmt=lambda v: f"{int(self.GRID_OPTIONS[int(v)])} mm")
         # angle slider exposes the denominator x in step = pi / x
         init_x = max(1, round(math.pi / planner.angle_step)) if planner.angle_step > 0 else 4
         self.angle_slider = Slider(1, 24, init_x, step=1, fmt=lambda v: f"π/{int(v)}")
@@ -917,7 +983,8 @@ class SnapPanel(Panel):
                         self.planner.angle_enabled = not self.planner.angle_enabled
                     return True
         if self.grid_slider.handle_event(event):
-            self.planner.grid_size = self.grid_slider.value
+            idx = max(0, min(len(self.GRID_OPTIONS) - 1, int(self.grid_slider.value)))
+            self.planner.grid_size = self.GRID_OPTIONS[idx]
             return True
         if self.angle_slider.handle_event(event):
             x = max(1, int(self.angle_slider.value))
@@ -929,29 +996,19 @@ class SnapPanel(Panel):
 class PlanPanel(Panel):
     title = "Path planner"
 
-    def __init__(self, planner: "PathPlanner", export_dir: str, simulator: "PathSimulator"):
+    def __init__(self, planner: "PathPlanner", simulator: "PathSimulator", on_preview):
         self.planner = planner
-        self.export_dir = export_dir
         self.simulator = simulator
+        self.on_preview = on_preview
         self.row_h = 20
         self.btn_h = 28
         self.status = ""
         self._buttons = []  # list of (rect, label, on_click) — populated on draw
 
     def _do_export(self):
-        data = [{"x": x, "y": y, "a": a} for (x, y, a) in self.planner.waypoints]
-        text = json.dumps(data, indent=2)
-        backend = copy_to_clipboard(text)
-        os.makedirs(self.export_dir, exist_ok=True)
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        path = os.path.join(self.export_dir, f"path_{ts}.json")
-        with open(path, "w") as f:
-            f.write(text)
-        if backend:
-            self.status = f"copied ({backend}) + {os.path.basename(path)}"
-        else:
-            self.status = f"clipboard failed; saved {os.path.basename(path)}"
-        logger.info(self.status)
+        text = self.planner.to_c_string()
+        self.on_preview(text)
+        self.status = "preview opened"
 
     def _toggle_simulate(self):
         if self.simulator.running:
@@ -1130,6 +1187,154 @@ class Sidebar:
         return x <= pos[0] < x + w and y <= pos[1] < y + h
 
 
+class SidePanel(Panel):
+    title = "Side"
+
+    def __init__(self, planner: "PathPlanner", on_toggle):
+        self.planner = planner
+        self.on_toggle = on_toggle
+        self.row_h = 22
+        self.btn_h = 28
+        self._buttons = []
+
+    def get_height(self, width, font):
+        return self.row_h + self.btn_h + 8
+
+    def draw(self, surface, rect, font):
+        x, y, w, _ = rect
+        self._buttons = []
+        title = font.render(self.title, True, SIDEBAR_ACCENT)
+        surface.blit(title, (x, y))
+        y += self.row_h
+        items = [("blue", COLOR_TEAM_BLUE), ("yellow", COLOR_TEAM_YELLOW)]
+        bw = (w - 8) // 2
+        for i, (val, color) in enumerate(items):
+            br = pg.Rect(x + i * (bw + 8), y, bw, self.btn_h)
+            active = self.planner.side == val
+            pg.draw.rect(surface, color if active else COLOR_GRAY, br, border_radius=4)
+            pg.draw.rect(surface, SIDEBAR_FG, br, width=1, border_radius=4)
+            text_color = COLOR_DEEPBLACK if active else SIDEBAR_FG
+            txt = font.render(val, True, text_color)
+            surface.blit(txt, (br.centerx - txt.get_width() // 2, br.centery - txt.get_height() // 2))
+            self._buttons.append((br, val))
+
+    def handle_event(self, event, rect) -> bool:
+        if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
+            for br, val in self._buttons:
+                if br.collidepoint(event.pos):
+                    if val != self.planner.side:
+                        self.on_toggle(val)
+                    return True
+        return False
+
+
+class PreviewScreen:
+    def __init__(self, code_text: str, on_back):
+        self.code = code_text
+        self.on_back = on_back
+        self.status = ""
+        self.scroll = 0
+        self._buttons = []  # (rect, callback)
+
+    def _do_copy(self):
+        backend = copy_to_clipboard(self.code)
+        self.status = f"copied ({backend})" if backend else "clipboard failed"
+
+    def draw(self, screen):
+        sw, sh = screen.get_size()
+        screen.fill(SIDEBAR_BG)
+        title_font = pg.font.SysFont("monospace", 22, bold=True)
+        ui_font = pg.font.SysFont("monospace", 14, bold=True)
+        code_font = pg.font.SysFont("monospace", 13)
+
+        margin = 16
+        btn_h = 32
+
+        self._buttons = []
+
+        # Back button
+        back_rect = pg.Rect(margin, margin, 110, btn_h)
+        pg.draw.rect(screen, COLOR_GRAY, back_rect, border_radius=6)
+        pg.draw.rect(screen, SIDEBAR_FG, back_rect, width=1, border_radius=6)
+        t = ui_font.render("← Back", True, SIDEBAR_FG)
+        screen.blit(t, (back_rect.centerx - t.get_width() // 2, back_rect.centery - t.get_height() // 2))
+        self._buttons.append((back_rect, self.on_back))
+
+        # Title
+        title = title_font.render("Generated code", True, SIDEBAR_ACCENT)
+        screen.blit(title, (back_rect.right + margin, margin + 3))
+
+        # Copy button
+        copy_rect = pg.Rect(sw - margin - 110, margin, 110, btn_h)
+        pg.draw.rect(screen, SIDEBAR_ACCENT, copy_rect, border_radius=6)
+        pg.draw.rect(screen, COLOR_DEEPBLACK, copy_rect, width=1, border_radius=6)
+        t = ui_font.render("Copy", True, COLOR_DEEPBLACK)
+        screen.blit(t, (copy_rect.centerx - t.get_width() // 2, copy_rect.centery - t.get_height() // 2))
+        self._buttons.append((copy_rect, self._do_copy))
+
+        if self.status:
+            s = ui_font.render(self.status, True, SIDEBAR_DIM)
+            screen.blit(s, (sw - margin - s.get_width(), margin + btn_h + 6))
+
+        # Code area
+        code_top = margin + btn_h + 30
+        code_area = pg.Rect(margin, code_top, sw - 2 * margin, sh - code_top - margin)
+        pg.draw.rect(screen, (0x12, 0x12, 0x16), code_area, border_radius=6)
+        pg.draw.rect(screen, SIDEBAR_DIM, code_area, width=1, border_radius=6)
+
+        old_clip = screen.get_clip()
+        screen.set_clip(code_area.inflate(-12, -12))
+        line_h = code_font.get_linesize()
+        y = code_area.y + 8 - self.scroll
+        for line in self.code.splitlines() or [""]:
+            if y + line_h >= code_area.y and y <= code_area.bottom:
+                surf = code_font.render(line, True, SIDEBAR_FG)
+                screen.blit(surf, (code_area.x + 10, y))
+            y += line_h
+        screen.set_clip(old_clip)
+
+    def handle_event(self, event) -> bool:
+        if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
+            for rect, cb in self._buttons:
+                if rect.collidepoint(event.pos):
+                    cb()
+                    return True
+        if event.type == pg.MOUSEWHEEL:
+            self.scroll = max(0, self.scroll - event.y * 30)
+            return True
+        if event.type == pg.KEYDOWN:
+            if event.key == pg.K_c:
+                self._do_copy()
+                self.on_back()
+                return True
+            if event.key in (pg.K_ESCAPE, pg.K_BACKSPACE):
+                self.on_back()
+                return True
+        return False
+
+
+def state_load(path: str):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        logger.warning(f"state load failed: {exc}")
+        return None
+
+
+def state_save(path: str, side: str, waypoints):
+    try:
+        with open(path, "w") as f:
+            json.dump({
+                "side": side,
+                "waypoints": [[x, y, a] for (x, y, a) in waypoints],
+            }, f, indent=2)
+    except Exception as exc:
+        logger.warning(f"state save failed: {exc}")
+
+
 class PokibotGameVisualizer:
     def __init__(self, world: World):
         self.world = world
@@ -1160,9 +1365,14 @@ class PokibotGameVisualizer:
                 ro.set_pos(ro.get_pos() + np.array([dx, dy]))
 
         def adj_grid(delta):
-            new_v = max(snap_panel.grid_slider.min_v, min(snap_panel.grid_slider.max_v, planner.grid_size + delta))
-            planner.grid_size = new_v
-            snap_panel.grid_slider.value = new_v
+            options = snap_panel.GRID_OPTIONS
+            try:
+                idx = options.index(planner.grid_size)
+            except ValueError:
+                idx = 1
+            idx = max(0, min(len(options) - 1, idx + delta))
+            planner.grid_size = options[idx]
+            snap_panel.grid_slider.value = idx
 
         def adj_angle(delta_x):
             cur_x = max(1, round(math.pi / planner.angle_step)) if planner.angle_step > 0 else 1
@@ -1173,11 +1383,13 @@ class PokibotGameVisualizer:
         bindings.register(pg.K_w, "toggle waypoints", toggle_wps)
         bindings.register(pg.K_a, "toggle robot obstacle", toggle_robot_obstacle)
         bindings.register(pg.K_z, "undo waypoint", planner.undo)
-        bindings.register(pg.K_c, "clear path", planner.clear)
+        bindings.register(pg.K_x, "clear path", planner.clear)
+        bindings.register(pg.K_c, "open code preview", lambda: open_preview(planner.to_c_string()))
+        bindings.register(pg.K_SPACE, "toggle simulation", lambda: plan_panel._toggle_simulate())
         bindings.register(pg.K_g, "toggle grid snap", lambda: setattr(planner, "grid_enabled", not planner.grid_enabled))
         bindings.register(pg.K_t, "toggle angle snap", lambda: setattr(planner, "angle_enabled", not planner.angle_enabled))
-        bindings.register(pg.K_MINUS, "grid size -10mm", lambda: adj_grid(-10))
-        bindings.register(pg.K_EQUALS, "grid size +10mm", lambda: adj_grid(+10))
+        bindings.register(pg.K_MINUS, "grid size prev", lambda: adj_grid(-1))
+        bindings.register(pg.K_EQUALS, "grid size next", lambda: adj_grid(+1))
         bindings.register(pg.K_COMMA, "angle denom -1", lambda: adj_angle(-1))
         bindings.register(pg.K_PERIOD, "angle denom +1", lambda: adj_angle(+1))
         bindings.register(pg.K_LEFT, "move obstacle -x", lambda: move_obstacle(-movement_speed, 0.0), repeat=True)
@@ -1215,16 +1427,59 @@ class PokibotGameVisualizer:
             ("wps", fmt_wps_visible),
         ])
 
-        export_dir = os.path.join(main_dir, "..", "exports")
         simulator = PathSimulator(self.world)
-        plan_panel = PlanPanel(planner, export_dir, simulator)
+
+        preview_ref = [None]  # list-as-cell for mutation from closures
+
+        def open_preview(code_text):
+            preview_ref[0] = PreviewScreen(code_text, on_back=lambda: preview_ref.__setitem__(0, None))
+
+        def toggle_side(new_side):
+            if new_side == planner.side:
+                return
+            planner.mirror_y_axis()
+            ro = self.world.obstacles.get("robot_obstacle")
+            if ro is not None:
+                p = ro.get_pos()
+                ro.set_pos(np.array([-p[0], p[1]]))
+            planner.side = new_side
+
+        side_panel = SidePanel(planner, toggle_side)
+        plan_panel = PlanPanel(planner, simulator, on_preview=open_preview)
         snap_panel = SnapPanel(planner)
-        sidebar = Sidebar([KeybindingsPanel(bindings), inputs, snap_panel, plan_panel])
+        sidebar = Sidebar([KeybindingsPanel(bindings), inputs, side_panel, snap_panel, plan_panel])
         sidebar_capture = False
         sim_dt = 1.0 / 60.0
 
+        bindings.register(pg.K_s, "toggle side", lambda: toggle_side("yellow" if planner.side == "blue" else "blue"))
+
+        # --- state persistence ---
+        state_path = os.path.join(main_dir, "..", "state.json")
+        loaded = state_load(state_path)
+        if loaded is not None:
+            planner.side = loaded.get("side", "blue")
+            planner.waypoints = [tuple(w) for w in loaded.get("waypoints", []) if len(w) == 3]
+        last_state_fp = (planner.side, tuple(planner.waypoints))
+
         while True:
             screen.fill(pg.Color(33, 33, 33))
+
+            if preview_ref[0] is not None:
+                preview_ref[0].draw(screen)
+                for e in pg.event.get():
+                    if e.type == pg.QUIT:
+                        return
+                    if e.type == pg.VIDEORESIZE:
+                        screen = pg.display.set_mode((e.w, e.h), pg.RESIZABLE)
+                        game_viz.screen = screen
+                        continue
+                    preview_ref[0].handle_event(e)
+                    if preview_ref[0] is None:
+                        break
+                pg.display.update()
+                clock.tick(60)
+                continue
+
             viewport, sb_rect, orientation = compute_layout(screen.get_size())
             sidebar.set_rect(sb_rect, orientation)
 
@@ -1271,6 +1526,12 @@ class PokibotGameVisualizer:
             bindings.poll(pg.key.get_pressed())
 
             sidebar.draw(screen)
+
+            # --- auto-save state on any change ---
+            fp = (planner.side, tuple(planner.waypoints))
+            if fp != last_state_fp:
+                state_save(state_path, planner.side, planner.waypoints)
+                last_state_fp = fp
 
             pg.display.update()
             clock.tick(60)
