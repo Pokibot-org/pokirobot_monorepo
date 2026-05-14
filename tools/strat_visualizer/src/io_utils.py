@@ -39,7 +39,8 @@ def state_load(path: str):
         return None
 
 
-def state_save(path: str, side: str, waypoints):
+def state_save(path: str, side: str, waypoints, labels=None):
+    labels = labels or []
     try:
         with open(path, "w") as f:
             json.dump({
@@ -48,6 +49,7 @@ def state_save(path: str, side: str, waypoints):
                     [x, y, a, [[aid, dict(args)] for (aid, args) in acts]]
                     for (x, y, a, acts) in waypoints
                 ],
+                "labels": [labels[i] if i < len(labels) else "" for i in range(len(waypoints))],
             }, f, indent=2)
     except Exception as exc:
         logger.warning(f"state save failed: {exc}")

@@ -148,7 +148,7 @@ class SnapPanel(Panel):
 
 class PlanPanel(Panel):
     title = "Path planner"
-    min_width = 240  # four buttons (Export/Play/Reset/Clear) need horizontal room
+    min_width = 300  # row of buttons (Export/Play/Step/Reset/Clear) needs horizontal room
 
     _DUR_MIN = 0.2
     _DUR_MAX = 3.0
@@ -172,6 +172,9 @@ class PlanPanel(Panel):
 
     def _play_pause(self):
         self.simulator.play_pause(self.planner.waypoints)
+
+    def _step_one(self):
+        self.simulator.step_one(self.planner.waypoints)
 
     def _reset_sim(self):
         self.simulator.reset(self.planner.waypoints)
@@ -223,7 +226,8 @@ class PlanPanel(Panel):
 
         sim_label = "Pause" if self.simulator.running else "Play"
         labels = [("Export", self._do_export), (sim_label, self._play_pause),
-                  ("Reset", self._reset_sim), ("Clear", self.planner.clear)]
+                  ("Step", self._step_one), ("Reset", self._reset_sim),
+                  ("Clear", self.planner.clear)]
         btn_w = (w - 8) // len(labels)
         for i, (label, cb) in enumerate(labels):
             bx = x + i * (btn_w + 4)

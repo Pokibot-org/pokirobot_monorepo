@@ -29,6 +29,7 @@ class PathSimulator:
         self.current_action = None
         self._action_queue = []
         self._action_elapsed = 0.0
+        self._step_mode = False
 
     def _sync_team(self):
         if self.planner is not None:
@@ -61,15 +62,28 @@ class PathSimulator:
     def reset(self, waypoints):
         self._load(waypoints)
         self.running = False
+        self._step_mode = False
         # Reset returns to the pre-start state so paths/waypoints render opaque.
         self.started = False
         self._on_user_paused(False)
 
     def stop(self):
         self.running = False
+        self._step_mode = False
         self.started = False
         self.world.robots.pop(self.PREVIEW_KEY, None)
         self._on_user_paused(False)
+
+    def step_one(self, waypoints):
+        """Run until the next waypoint's actions complete, then pause."""
+        if not self.started or self.wp_index >= len(self.wps):
+            if not self._load(waypoints):
+                return
+        if self.wp_index >= len(self.wps):
+            return
+        self._step_mode = True
+        self.running = True
+        self._on_user_paused(True)
 
     def _avoidance_velocity(self, desired_dir, dist_to_target):
         """Potential-field steering. desired_dir is a unit vector toward the target."""
@@ -115,6 +129,10 @@ class PathSimulator:
                 else:
                     self.current_action = None
                     self._action_elapsed = 0.0
+                    if self._step_mode:
+                        self.running = False
+                        self._step_mode = False
+                        self._on_user_paused(False)
             return
         if not self.running or self.wp_index >= len(self.wps):
             self.running = False
@@ -149,5 +167,10 @@ class PathSimulator:
                 aid, args = arrived_actions[0]
                 self.current_action = format_action(aid, args)
                 self._action_elapsed = 0.0
+            elif self._step_mode:
+                self.running = False
+                self._step_mode = False
+                self._on_user_paused(False)
             if self.wp_index >= len(self.wps):
                 self.running = False
+                self._step_mode = False

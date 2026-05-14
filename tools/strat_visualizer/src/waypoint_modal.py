@@ -132,10 +132,13 @@ class WaypointModal:
         self._font = _make_font()
 
         queued = self.planner.get_actions(self.wp_index)
-        self._cursor = max(1, len(queued))
+        # cursor sits on the first "Add action" row by default: skip label + queued/(none).
+        self._cursor = 1 + max(1, len(queued))
         self._rect = pg.Rect(0, 0, _PANEL_W, 0)
         self._row_rects = []
         self._sub_modal = None
+        self._editing_label = False
+        self._label_buffer = ""
 
     def _queued(self):
         return self.planner.get_actions(self.wp_index)
@@ -143,7 +146,7 @@ class WaypointModal:
     def _total_rows(self):
         queued = self._queued()
         n_queued = max(1, len(queued))
-        return n_queued + len(action_ids()) + 3
+        return 1 + n_queued + len(action_ids()) + 3
 
     def _clamp_cursor(self):
         total = self._total_rows()
@@ -152,7 +155,8 @@ class WaypointModal:
     def _compute_height(self):
         queued = self._queued()
         n_queued = max(1, len(queued))
-        h = _PAD + _HEADER_H + _SECTION_H + n_queued * _ROW_H
+        h = _PAD + _HEADER_H + _ROW_H  # label row
+        h += _SECTION_H + n_queued * _ROW_H
         h += _SECTION_H + len(action_ids()) * _ROW_H
         h += _SECTION_H + 3 * _ROW_H + _PAD
         return h
@@ -182,6 +186,27 @@ class WaypointModal:
         header = font.render(f"Waypoint #{self.wp_index + 1}", True, SIDEBAR_ACCENT)
         screen.blit(header, (x + _PAD, cy + (_HEADER_H - header.get_height()) // 2))
         cy += _HEADER_H
+
+        label_rect = pg.Rect(x, cy, _PANEL_W, _ROW_H)
+        if self._cursor == cursor_row:
+            hl = pg.Surface((_PANEL_W, _ROW_H), pg.SRCALPHA)
+            hl.fill((*SIDEBAR_ACCENT, 50))
+            screen.blit(hl, (x, cy))
+        prefix = font.render("label:", True, SIDEBAR_DIM)
+        screen.blit(prefix, (x + _PAD, cy + (_ROW_H - prefix.get_height()) // 2))
+        text_x = x + _PAD + prefix.get_width() + 6
+        if self._editing_label:
+            shown = self._label_buffer + "_"
+            text_color = SIDEBAR_ACCENT
+        else:
+            current = self.planner.get_label(self.wp_index)
+            shown = current if current else "(click to edit)"
+            text_color = SIDEBAR_FG if current else SIDEBAR_DIM
+        text_surf = font.render(shown, True, text_color)
+        screen.blit(text_surf, (text_x, cy + (_ROW_H - text_surf.get_height()) // 2))
+        self._row_rects.append(("label", None, label_rect, None))
+        cursor_row += 1
+        cy += _ROW_H
 
         sec = font.render("Queued actions", True, SIDEBAR_DIM)
         screen.blit(sec, (x + _PAD, cy + (_SECTION_H - sec.get_height()) // 2))
@@ -298,15 +323,38 @@ class WaypointModal:
             return False
         acts[qi], acts[target] = acts[target], acts[qi]
         self.planner.set_actions(self.wp_index, acts)
-        self._cursor = target
+        self._cursor = target + 1  # +1 for the label row at cursor 0
         return True
+
+    def _cursor_queued_index(self):
+        """If cursor is on a queued action row, return its index in the actions
+        list; otherwise return None. Label row sits at cursor 0."""
+        if self._cursor < 1:
+            return None
+        queued = self._queued()
+        qi = self._cursor - 1
+        return qi if 0 <= qi < len(queued) else None
 
     def _append_default(self, aid):
         acts = self.planner.get_actions(self.wp_index)
         acts.append((aid, action_default_args(aid)))
         self.planner.set_actions(self.wp_index, acts)
 
+    def _begin_label_edit(self):
+        self._label_buffer = self.planner.get_label(self.wp_index)
+        self._editing_label = True
+
+    def _commit_label_edit(self):
+        self.planner.set_label(self.wp_index, self._label_buffer)
+        self._editing_label = False
+
+    def _cancel_label_edit(self):
+        self._editing_label = False
+
     def _activate_row(self, kind, data):
+        if kind == "label":
+            self._begin_label_edit()
+            return
         if kind == "queued":
             self._open_config_for_queued(data)
         elif kind == "add":
@@ -338,30 +386,56 @@ class WaypointModal:
         if self._sub_modal is not None:
             return self._sub_modal.handle_event(event)
 
+        if self._editing_label:
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_ESCAPE:
+                    self._cancel_label_edit()
+                    return True
+                if event.key in (pg.K_RETURN, pg.K_KP_ENTER):
+                    self._commit_label_edit()
+                    return True
+                if event.key == pg.K_BACKSPACE:
+                    self._label_buffer = self._label_buffer[:-1]
+                    return True
+                if event.unicode and event.unicode.isprintable():
+                    self._label_buffer += event.unicode
+                    return True
+                return True
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if self._rect.collidepoint(event.pos):
+                    self._commit_label_edit()
+                    return True
+                self._commit_label_edit()
+                self.close()
+                return True
+            if event.type in (pg.MOUSEMOTION, pg.MOUSEBUTTONUP):
+                return self._rect.collidepoint(event.pos)
+            return False
+
         if event.type == pg.KEYDOWN:
             if event.key == pg.K_ESCAPE:
                 self.close()
                 return True
             if event.key == pg.K_UP:
                 if event.mod & pg.KMOD_SHIFT:
-                    queued = self._queued()
-                    if self._cursor < len(queued):
-                        self._move_queued(self._cursor, -1)
+                    qi = self._cursor_queued_index()
+                    if qi is not None:
+                        self._move_queued(qi, -1)
                     return True
                 self._cursor = max(0, self._cursor - 1)
                 return True
             if event.key == pg.K_DOWN:
                 if event.mod & pg.KMOD_SHIFT:
-                    queued = self._queued()
-                    if self._cursor < len(queued):
-                        self._move_queued(self._cursor, +1)
+                    qi = self._cursor_queued_index()
+                    if qi is not None:
+                        self._move_queued(qi, +1)
                     return True
                 self._cursor = min(self._total_rows() - 1, self._cursor + 1)
                 return True
             if event.key in (pg.K_DELETE, pg.K_BACKSPACE):
-                queued = self._queued()
-                if self._cursor < len(queued):
-                    self._remove_queued(self._cursor)
+                qi = self._cursor_queued_index()
+                if qi is not None:
+                    self._remove_queued(qi)
                 return True
             if event.key in (pg.K_RETURN, pg.K_KP_ENTER):
                 self._activate_cursor_row()

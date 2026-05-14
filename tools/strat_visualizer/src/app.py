@@ -99,7 +99,7 @@ class PokibotGameVisualizer:
         if 0 <= idx < len(self.planner.waypoints):
             x, y, a, _ = self.planner.waypoints[idx]
             insert_idx = idx if before else idx + 1
-            self.planner.insert_waypoint(insert_idx, x, y, a, [])
+            self.planner.insert_waypoint(insert_idx, x, y, a, [], label="")
             self.planner.start_placing(insert_idx)
 
     def _open_wp_modal(self, wp_index, anchor_screen_pos):
@@ -135,6 +135,7 @@ class PokibotGameVisualizer:
         b.bind(pg.K_x, p.clear, doc="clear path")
         b.bind(pg.K_c, lambda: self._open_preview(p.to_c_string()), doc="open code preview")
         b.bind(pg.K_SPACE, lambda: self.plan_panel._play_pause(), doc="sim play/pause")
+        b.bind(pg.K_n, lambda: self.plan_panel._step_one(), doc="sim step one waypoint")
         b.bind(pg.K_ESCAPE, lambda: self.plan_panel._reset_sim(), doc="sim reset")
         b.bind(pg.K_g, lambda: setattr(p, "grid_enabled", not p.grid_enabled), doc="toggle grid snap")
         b.bind(pg.K_t, lambda: setattr(p, "angle_enabled", not p.angle_enabled), doc="toggle angle snap")
@@ -223,12 +224,18 @@ class PokibotGameVisualizer:
                 elif len(w) == 4:
                     wps.append((w[0], w[1], w[2], normalize_actions_list(w[3])))
             self.planner.waypoints = wps
-        self._last_state_fp = (self.planner.side, tuple(self.planner.waypoints))
+            raw_labels = loaded.get("labels", []) or []
+            self.planner.labels = [
+                str(raw_labels[i]) if i < len(raw_labels) else "" for i in range(len(wps))
+            ]
+        self._last_state_fp = (self.planner.side, tuple(self.planner.waypoints),
+                                tuple(self.planner.labels))
 
     def _autosave_state(self):
-        fp = (self.planner.side, tuple(self.planner.waypoints))
+        fp = (self.planner.side, tuple(self.planner.waypoints), tuple(self.planner.labels))
         if fp != self._last_state_fp:
-            state_save(self._state_path, self.planner.side, self.planner.waypoints)
+            state_save(self._state_path, self.planner.side,
+                       self.planner.waypoints, self.planner.labels)
             self._last_state_fp = fp
 
     # ---- event handling ----------------------------------------------------

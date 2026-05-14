@@ -17,6 +17,7 @@ class PathPlanner:
 
     def __init__(self):
         self.waypoints = []  # list of (x, y, angle, [action_id, ...])
+        self.labels = []     # parallel list of free-form per-waypoint notes
         self.side = "blue"
         # snap state
         self.grid_enabled = True
@@ -54,17 +55,31 @@ class PathPlanner:
             x, y, a, _ = self.waypoints[idx]
             self.waypoints[idx] = (x, y, a, list(actions))
 
-    def insert_waypoint(self, idx, x, y, angle, actions=None):
+    def insert_waypoint(self, idx, x, y, angle, actions=None, label=""):
         self.waypoints.insert(idx, (x, y, angle, list(actions or [])))
+        self.labels.insert(idx, label)
 
     def delete_index(self, idx):
         if 0 <= idx < len(self.waypoints):
             self.waypoints.pop(idx)
+            if idx < len(self.labels):
+                self.labels.pop(idx)
             if self._placing_index is not None:
                 if idx == self._placing_index:
                     self._placing_index = None
                 elif idx < self._placing_index:
                     self._placing_index -= 1
+
+    def get_label(self, idx) -> str:
+        if 0 <= idx < len(self.labels):
+            return self.labels[idx]
+        return ""
+
+    def set_label(self, idx, text: str):
+        while len(self.labels) < len(self.waypoints):
+            self.labels.append("")
+        if 0 <= idx < len(self.waypoints):
+            self.labels[idx] = text
 
     def is_placing(self) -> bool:
         return self._placing_index is not None
@@ -87,6 +102,8 @@ class PathPlanner:
         if self._placing_index is None:
             return
         self.waypoints.pop(self._placing_index)
+        if self._placing_index < len(self.labels):
+            self.labels.pop(self._placing_index)
         self._placing_index = None
 
     def _snap_pos(self, pos):
@@ -152,6 +169,8 @@ class PathPlanner:
         if i is None:
             return False
         self.waypoints.pop(i)
+        if i < len(self.labels):
+            self.labels.pop(i)
         self._hover_indices = []
         self._hover_cycle = 0
         return True
@@ -197,6 +216,7 @@ class PathPlanner:
             else:
                 angle = self._snap_angle(math.atan2(ey - sy, ex - sx))
             self.waypoints.append((sx, sy, angle, []))
+            self.labels.append("")
         self._mode = None
         self._edit_index = None
         self._drag_start = None
@@ -205,9 +225,12 @@ class PathPlanner:
     def undo(self):
         if self.waypoints:
             self.waypoints.pop()
+            if self.labels:
+                self.labels.pop()
 
     def clear(self):
         self.waypoints.clear()
+        self.labels.clear()
         self._mode = None
         self._edit_index = None
         self._drag_start = None
@@ -232,6 +255,9 @@ class PathPlanner:
             return "// no waypoints\n"
         lines = []
         for i, (x, y, a, acts) in enumerate(self.waypoints, start=1):
+            label = self.get_label(i - 1)
+            if label:
+                lines.append(f"// {label}")
             lines.append(
                 f"nav_go_to_direct(convert_pos_for_team_no_angle(color, "
                 f"(pos2_t){{.x = {x:.3f}f, .y = {y:.3f}f, .a = {a:.6f}f}}, 0.0f), K_FOREVER); "
@@ -376,10 +402,12 @@ class PathPlanner:
             return
         x, y, a, acts = self.waypoints[idx]
         a_deg = math.degrees(a)
-        lines = [
-            f"#{idx + 1}  x={x:.0f}  y={y:.0f}",
-            f"a={a:.3f} rad ({a_deg:.1f}°)",
-        ]
+        label = self.get_label(idx)
+        lines = []
+        if label:
+            lines.append(f"“{label}”")
+        lines.append(f"#{idx + 1}  x={x:.0f}  y={y:.0f}")
+        lines.append(f"a={a:.3f} rad ({a_deg:.1f}°)")
         if acts:
             if len(acts) <= 3:
                 labels = ", ".join(format_action(aid, args) for (aid, args) in acts)
