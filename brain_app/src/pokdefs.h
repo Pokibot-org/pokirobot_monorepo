@@ -14,8 +14,9 @@
 #define ROBOT_RADIUS                 180.0f
 #define ROBOT_DIST_TO_FLAT_SIZE      165.0f
 #define ROBOT_CENTER_POLE_RADIUS     49.0f
+#define ROBOT_CENTER_TO_RECAL_SIDE   130.0f
 
-#define ROBOT_CALIB_SIDE_OFFSET      (-M_PI / 2)
+#define ROBOT_CALIB_SIDE_OFFSET      0.0f
 // #define ROBOT_PUSH_SIDE_OFFSET      (M_PI - M_PI / 6)
 
 #define OPPONENT_ROBOT_MAX_RADIUS   191.0f // 1.2/(2*pi)

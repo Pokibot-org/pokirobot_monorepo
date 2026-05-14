@@ -2,6 +2,7 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
 #include "nav/nav.h"
+#include "pokibot/lib/pokutils.h"
 #include "pokibot/poktypes.h"
 #include "pomicontrol/pomicontrol.h"
 #include "pokdefs.h"
@@ -78,10 +79,9 @@ const struct nav_obstacle start_zone = {
 
 const struct nav_obstacle end_zone = start_zone;
 
-const pos2_t start_pos = {
+const point2_t start_point = {
     .x = BOARD_MIN_X + 2700.0f,
     .y = 1775.0f,
-    .a = M_PI,
 };
 
 #define BOARD_END_POS_X (BOARD_MIN_X + 2825.0f)
@@ -89,7 +89,7 @@ const pos2_t start_pos = {
 const pos2_t end_pos = {
     .x = BOARD_END_POS_X,
     .y = 1775.0f,
-    .a = 2*M_PI,
+    .a = 0.0f,
 };;
 
 #define TEMP_0_WIDTH   250.0f
@@ -234,7 +234,7 @@ int match(enum pokprotocol_team color)
 {
     uint32_t match_start_time_ms =  k_uptime_get_32();
 
-    nav_set_pos(convert_pos_for_team_no_angle(color, start_pos, 0.0f));
+    nav_set_pos(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, 0.0f), M_PI));
     nav_set_brake(false);
 
     LOG_INF("Leaving start zone");
@@ -296,7 +296,7 @@ int match(enum pokprotocol_team color)
         k_sleep(K_MSEC(100));
     }
 
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, 0.0f), K_FOREVER);
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, 2*M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     pokuicom_send_score(123);
@@ -306,27 +306,57 @@ int match(enum pokprotocol_team color)
 }
 
 
-// void calibrate(enum pokprotocol_team color)
-// {
-//     nav_obstacle_detection(false);
-//     nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
+void calibrate(enum pokprotocol_team color)
+{
+    uint32_t nav_events;
+    nav_obstacle_detection(false);
+    // nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
 
-//     uint32_t nav_events;
-//     point2_t converted_start_point = convert_point_for_team(color, start_zone.data.rectangle.point);
-//     point2_t start_point = {
-//         .x = converted_start_point.x - start_zone.data.rectangle.width / 2 + ROBOT_DIST_TO_FLAT_SIZE,
-//         .y = converted_start_point.y - start_zone.data.rectangle.height / 2 + ROBOT_RADIUS,
-//     };
-//     pos2_t start_pos = CONVERT_POINT2_TO_POS2(start_point, 0.0f);
-//     nav_set_pos(start_pos);
-//     k_sleep(K_MSEC(500));
+    k_sleep(K_MSEC(1000));
 
-//     nav_go_to_direct(CONVERT_POINT2_TO_POS2(converted_start_point, 0.0f), K_FOREVER);
-//     nav_wait_events(&nav_events);
+    nav_set_pos(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f));
+    nav_set_brake(false);
+    
+    /// CALIB Y
+    pos2_t pos_recal_y = convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f);
+    pos2_t pos_recal_y_expected = pos_recal_y;
+    pos_recal_y.y += 200.0f;
+    pos_recal_y_expected.y = BOARD_MAX_Y - ROBOT_CENTER_TO_RECAL_SIDE;
+    nav_go_to_direct(pos_recal_y, K_SECONDS(4));
+    nav_wait_events(&nav_events);
 
-//     nav_set_speed(NAV_PLANAR_VMAX_DEFAULT, NAV_ANGULAR_VMAX_DEFAULT);
-//     nav_obstacle_detection(true);
-// }
+    nav_set_pos(pos_recal_y_expected);
+    // CALIB Y OK
+
+    // GO TO CENTER
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    // CALIB X
+    nav_go_to_direct(convert_pos_for_team(color, CONVERT_POINT2_TO_POS2(start_point, 0.0f), M_PI/2), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    pos2_t pos_recal_x = CONVERT_POINT2_TO_POS2(start_point, 0.0f);
+    pos2_t pos_recal_x_expected = pos_recal_x;
+    pos_recal_x.x += 200.0f;
+    pos_recal_x_expected.x = BOARD_MAX_X - ROBOT_CENTER_TO_RECAL_SIDE;
+
+    pos_recal_x =  convert_pos_for_team(color, pos_recal_x, M_PI/2);
+    pos_recal_x_expected =  convert_pos_for_team(color, pos_recal_x_expected, M_PI/2);
+
+    nav_go_to_direct(pos_recal_x, K_SECONDS(4));
+    nav_wait_events(&nav_events);
+
+    nav_set_pos(pos_recal_x_expected);
+    nav_go_to_direct(convert_pos_for_team(color, CONVERT_POINT2_TO_POS2(start_point, 0.0f), M_PI/2), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    // nav_set_speed(NAV_PLANAR_VMAX_DEFAULT, NAV_ANGULAR_VMAX_DEFAULT);
+    nav_obstacle_detection(true);
+}
 
 int main(void)
 {
@@ -365,9 +395,9 @@ int main(void)
     pokuicom_send_score(score);
     LOG_INF("Init of all the actuators: OK");
 
-    // LOG_INF("Calibration");
-    // calibrate(color);
-    // LOG_INF("Calibration: OK");
+    LOG_INF("Calibration");
+    calibrate(color);
+    LOG_INF("Calibration: OK");
 
     while (pokuicom_get_tirette_status() != POKTOCOL_TIRETTE_STATUS_UNPLUGGED) {
         pokuicom_request(POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS);
