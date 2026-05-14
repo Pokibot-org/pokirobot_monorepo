@@ -84,7 +84,11 @@ const pos2_t start_pos = {
     .a = M_PI,
 };
 
-const pos2_t end_pos = start_pos;
+const pos2_t end_pos = {
+    .x = BOARD_MIN_X + 2800.0f,
+    .y = 1600.0f,
+    .a = M_PI,
+};;
 
 #define TEMP_0_WIDTH   250.0f
 #define CURSOR_WIDTH   100.0f
@@ -97,7 +101,13 @@ const pos2_t end_pos = start_pos;
 
 pos2_t zone_exit_wp = {
     .x = BOARD_MIN_X + 2700.0f,
-    .y = 1650.0f,
+    .y = 1600.0f,
+    .a = 0.0f,
+};
+
+pos2_t zone_enter_wp = {
+    .x = BOARD_MIN_X + 2800.0f,
+    .y = 1200.0f,
     .a = 0.0f,
 };
 
@@ -128,6 +138,12 @@ pos2_t pus_top_r_wp1 = {
 pos2_t pus_top_r_wp2 = {
     .x = BOARD_MAX_X - ROBOT_DIST_TO_FLAT_SIZE - 10.0f,
     .y = 1600.0f,
+    .a = 0.0f,
+};
+
+pos2_t pus_top_r_go_bw_wp3 = {
+    .x = BOARD_MAX_X - ROBOT_DIST_TO_FLAT_SIZE - 10.0f,
+    .y = 1500.0f,
     .a = 0.0f,
 };
 
@@ -202,7 +218,6 @@ void end_of_match_work_handler(struct k_work *work)
     k_sleep(K_FOREVER);
 }
 
-#if CONFIG_POKISTRAT_MAIN
 uint8_t score = 0;
 
 #define WAIT_EVENTS_AND_HANDLE(events)                                                             \
@@ -215,7 +230,7 @@ uint8_t score = 0;
 
 int match(enum pokprotocol_team color)
 {
-    // uint32_t match_start_time_ms =  k_uptime_get_32();
+    uint32_t match_start_time_ms =  k_uptime_get_32();
 
     nav_set_pos(convert_pos_for_team_no_angle(color, start_pos, 0.0f));
     nav_set_brake(false);
@@ -234,8 +249,16 @@ int match(enum pokprotocol_team color)
     nav_wait_events(&nav_events);
     nav_go_to_direct(convert_pos_for_team_no_angle(color, pus_top_r_wp2, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    k_sleep(K_FOREVER);
-    return 0;
+    score += 1;
+    pokuicom_send_score(score);
+
+    LOG_INF("Back in start zone");
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, pus_top_r_go_bw_wp3, M_PI), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
+    nav_wait_events(&nav_events);
+    LOG_INF("Left start zone");
 
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -250,33 +273,35 @@ int match(enum pokprotocol_team color)
     nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp4, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
+    score += 1;
+    pokuicom_send_score(score);
+
     LOG_INF("GO CORRIDOR");
 
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, zone_exit_wp, M_PI), K_FOREVER);
+
+
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, zone_enter_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
     LOG_INF("GO HOME");
 
+    // WAIT UNTIL 95s
+    while ((k_uptime_get_32() - match_start_time_ms) < (95 * 1000)) {
+        k_sleep(K_MSEC(100));
+    }
+
     nav_go_to_direct(convert_pos_for_team_no_angle(color, end_pos, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
-    score += STRAT_END_GAME_IN_BACKSTAGE_SCORE;
-    pokuicom_send_score(score);
+    pokuicom_send_score(123);
 
     k_sleep(K_FOREVER);
     return 0;
 }
-#else
-// FOR CERTIF
-int match(enum pokprotocol_team color)
-{
-    return 0;
-}
-#endif
 
 
 // void calibrate(enum pokprotocol_team color)
