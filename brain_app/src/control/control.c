@@ -400,7 +400,7 @@ int control_start(struct control *obj)
 
     k_tid_t thread_id = k_thread_create(&control_thread, control_thread_stack,
                                         K_THREAD_STACK_SIZEOF(control_thread_stack), control_task,
-                                        obj, NULL, NULL, 2, 0, K_NO_WAIT);
+                                        obj, NULL, NULL, 1, 0, K_NO_WAIT);
     k_thread_name_set(thread_id, "control");
     return ret;
 }

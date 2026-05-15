@@ -164,6 +164,11 @@ int nav_set_pos(const pos2_t pos)
     return control_set_pos(&control_obj, pos, true);
 }
 
+int nav_get_pos(pos2_t *pos)
+{
+    return control_get_pos(&control_obj, pos);
+}
+
 int nav_set_brake(bool status)
 {
     return control_set_brake(&control_obj, status);
