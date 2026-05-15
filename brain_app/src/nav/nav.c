@@ -515,8 +515,9 @@ void nav_register_obstacle(struct nav_obstacle *obs) {
 
 int nav_set_speed(float planar_vmax, float angular_vmax)
 {
+    control_set_planar_vmax(&control_obj, planar_vmax);
+    control_set_angular_vmax(&control_obj, angular_vmax);
     return 0;
-    // return control_set_speed(&control_obj, planar_vmax, angular_vmax);
 }
 
 void nav_obstacle_detection(bool state)
@@ -530,6 +531,10 @@ void nav_obstacle_detection(bool state)
 
 int nav_init(void)
 {
+    // lidar_start(lidar_dev);
+    // _test_calibration_distance(&control_obj);
+    // _test_calibration_angle(&control_obj);
+    // return 0;
     control_start(&control_obj);
 
     static struct k_work_queue_config cfg = {

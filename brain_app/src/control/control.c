@@ -18,16 +18,16 @@ LOG_MODULE_REGISTER(control);
 #define CONTROL_WAIT_TIMEOUT_BRAKE  (-2)
 
 #define CONTROL_PERIOD_MS 2.0f
-#define ROBOT_L           147.0f
-#define WHEEL_PERIMETER   515.221195188726f
-#define MM_TO_USTEPS      1417.0f
+#define ROBOT_L           144.0f
+#define WHEEL_PERIMETER   515.0f
+#define MM_TO_USTEPS      122.0f
 
-#define PLANAR_VMAX_DEFAULT                400.0f // 700 mm/s
+#define PLANAR_VMAX_DEFAULT                 400.0f // 700 mm/s
 #define PLANAR_FACTOR(_planar_vmax)         (0.06f * (_planar_vmax))
 #define PLANAR_RAMP(_planar_vmax)           (2.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
 
-#define ANGULAR_VMAX_DEFAULT   (0.7f * M_PI) // 0.5 rotation/s
-#define ANGULAR_FACTOR(_angular_vmax)         (0.7f * (_angular_vmax))
+#define ANGULAR_VMAX_DEFAULT                  (0.7f * M_PI) // 0.5 rotation/s
+#define ANGULAR_FACTOR(_angular_vmax)         (1.0f * (_angular_vmax))
 #define ANGULAR_RAMP(_angular_vmax)           (0.5f * (_angular_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
 
 // normal
@@ -347,14 +347,13 @@ static void control_task(void *arg0, void *arg1, void *arg2)
         pokstepper_set_speed(obj->stepper1, (int32_t)(motors_v.v2 * MM_TO_USTEPS / WHEEL_PERIMETER));
         pokstepper_set_speed(obj->stepper2, (int32_t)(motors_v.v3 * MM_TO_USTEPS / WHEEL_PERIMETER));
     continue_nocommit:
-        // sleep
         LOG_DBG("idx: %d", obj->waypoints.idx);
         LOG_DBG("pos: %.2f %.2f %.2f", (double)pos.x, (double)pos.y, (double)pos.a);
         LOG_DBG("target: %.2f %.2f %.2f", (double)wp1.x, (double)wp1.y, (double)wp1.a);
         LOG_DBG("next: %.2f %.2f %.2f", (double)wp2.x, (double)wp2.y, (double)wp2.a);
         LOG_DBG("speed: %.2f %.2f %.2f", (double)motors_v.v1, (double)motors_v.v2,
                 (double)motors_v.v3);
-        k_sleep(K_MSEC((uint64_t)CONTROL_PERIOD_MS));
+        k_timer_status_sync(&obj->control_timer);
     }
     LOG_INF("control task done");
 }
@@ -371,6 +370,11 @@ int control_start(struct control *obj)
         LOG_ERR("Mutex init error waypoints lock");
         return -ENODEV;
     }
+
+    // Initialize and start control timer (2ms period, non-oneshot)
+    k_timer_init(&obj->control_timer, NULL, NULL);
+    k_timer_user_data_set(&obj->control_timer, obj);
+    k_timer_start(&obj->control_timer, K_MSEC((int)CONTROL_PERIOD_MS), K_MSEC((int)CONTROL_PERIOD_MS));
 
     if (!device_is_ready(obj->stepper0)) {
         LOG_ERR("Device stepper0 is not ready");

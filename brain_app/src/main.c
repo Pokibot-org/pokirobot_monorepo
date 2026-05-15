@@ -245,7 +245,9 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
     pos2_t start_calib_pos = convert_pos_for_team_no_angle(color, recal_start_pos, offset);
     nav_go_to_direct(start_calib_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);
-    
+
+    nav_set_speed(200.0f, ANGULAR_VMAX_DEFAULT);    
+
     LOG_INF(LOG_POS_ARGS("start_pos", recal_start_pos));
 
     pos2_t pos_recal = recal_start_pos;
@@ -303,6 +305,8 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
 
     nav_go_to_direct(recal_start_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);
+
+    nav_set_speed(PLANAR_VMAX_DEFAULT, ANGULAR_VMAX_DEFAULT);
 
     nav_go_to_direct(start_calib_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);

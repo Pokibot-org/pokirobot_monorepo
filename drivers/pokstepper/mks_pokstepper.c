@@ -623,8 +623,10 @@ static int mks_pokstepper_api_set_speed(const struct device *dev, int32_t speed)
 {
     if (speed > 1500) {
         speed = 1500;
+        LOG_ERR("SPEED TOO HIGH");
     } else if (speed < -1500) {
         speed = -1500;
+        LOG_ERR("SPEED TOO HIGH");
     }
     return mks_pokstepper_speed_mode(dev, speed, 0);
 }
@@ -708,7 +710,7 @@ static int mks_pokstepper_init(const struct device *dev)
     }
 
     // 0 = 256 mstep
-    if (mks_pokstepper_set_mstep(dev, 0))
+    if (mks_pokstepper_set_mstep(dev, 64))
     {
         LOG_ERR("Cannot write mstep");
         return -ENODEV;

@@ -5,6 +5,9 @@
 
 #define CONTROL_WAYPOINTS_N 256
 
+#define PLANAR_VMAX_DEFAULT                   400.0f // 400 mm/s
+#define ANGULAR_VMAX_DEFAULT                  (0.7f * M_PI) // 0.5 rotation/s
+
 typedef struct waypoints {
     pos2_t wps[CONTROL_WAYPOINTS_N];
     int n;
@@ -34,6 +37,7 @@ struct control {
     const struct device *stepper1;
     const struct device *stepper2;
     struct k_mutex access_mutex;
+    struct k_timer control_timer;
 };
 
 int control_start(struct control *obj);
