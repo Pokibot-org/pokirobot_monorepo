@@ -201,7 +201,7 @@ vel2_t local_vel_from_world(pos2_t pos, vel2_t world_vel)
 {
     vel2_t local_vel = {
         .vx = cosf(pos.a) * world_vel.vx + sinf(pos.a) * world_vel.vy,
-        .vy = -sinf(pos.a) * world_vel.vx + cosf(-pos.a) * world_vel.vy,
+        .vy = -sinf(pos.a) * world_vel.vx + cosf(pos.a) * world_vel.vy,
         .w = -world_vel.w,
     };
     return local_vel;
@@ -212,7 +212,7 @@ vel2_t local_vel_from_omni(omni3_t omni)
     vel2_t local_vel = {
         .vx = (2.0f * omni.v1 - omni.v3 - omni.v2) / 3.0f,
         .vy = M_SQRT3 * (omni.v2 - omni.v3) / 3.0f,
-        .w = omni.v3 + omni.v1 + omni.v2 / (3.0f * ROBOT_L),
+        .w = (omni.v3 + omni.v1 + omni.v2) / (3.0f * ROBOT_L),
     };
     return local_vel;
 }
@@ -303,7 +303,7 @@ static void control_task(void *arg0, void *arg1, void *arg2)
         pos2_t delta2 = pos2_diff(wp2, pos);
         wp_dist = vec2_abs((vec2_t){delta1.x, delta1.y});
         if (idx >= (n - 1) && wp_dist < CONTROL_PLANAR_TARGET_SENSITIVITY_DEFAULT &&
-            delta2.a < CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT) {
+            fabsf(delta2.a) < CONTROL_ANGULAR_TARGET_SENSITIVITY_DEFAULT) {
             obj->at_target = true;
         } else {
             obj->at_target = false;
