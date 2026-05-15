@@ -132,3 +132,15 @@ int control_set_waypoints(struct control *obj, const pos2_t *src, int n)
     
     return ret;
 }
+
+int control_set_planar_vmax(struct control *obj, float vmax)
+{
+    obj->planar_vmax = vmax;
+    return 0;
+}
+
+int control_set_angular_vmax(struct control *obj, float vmax)
+{
+    obj->angular_vmax = vmax;
+    return 0;
+}
