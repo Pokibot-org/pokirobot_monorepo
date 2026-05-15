@@ -161,6 +161,7 @@ static void log_astar_grid(char *current_grid, int start, int end) {
 
 int nav_set_pos(const pos2_t pos)
 {
+    LOG_DBG(LOG_POS_ARGS("nav_set_pos", pos));
     return control_set_pos(&control_obj, pos, true);
 }
 
