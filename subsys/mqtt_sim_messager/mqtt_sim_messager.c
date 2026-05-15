@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "MQTTClient.h"
 #include <cmdline.h>
 #include <posix_native_task.h>
@@ -18,6 +19,12 @@ LOG_MODULE_REGISTER(msm, CONFIG_MSM_LOG_LEVEL);
 #define TIMEOUT     1000L
 #define ROOT_TOPIC "msm/" CONFIG_MSM_DEVICE_NAME "/"
 
+#define MSM_DISPATCH_STACK_SIZE 4096
+#define MSM_DISPATCH_PRIO       5
+#define MSM_DISPATCH_POLL_MS    5
+#define MSM_QUEUE_MAX           32
+#define MSM_TOPIC_MAX           128
+
 static char pid_client_id[32];
 static char *client_id = NULL;
 static char base_topic[64];
@@ -27,29 +34,75 @@ static MQTTClient client;
 static volatile MQTTClient_deliveryToken delivered_token;
 static sys_slist_t topic_list;
 
+/*
+ * Paho-MQTT delivers msg_clbk on its own host pthread. Calling Zephyr APIs
+ * from that thread trips native_simulator's nsif_cpu0_irq_raised_from_sw
+ * "HW model thread" check. Producer copies the message into a pthread-mutex
+ * protected FIFO; a Zephyr thread polls it and dispatches on the SW/CPU side.
+ */
+struct msm_pending {
+    struct msm_pending *next;
+    int payload_len;
+    char *payload;
+    char trimmed_topic[MSM_TOPIC_MAX];
+};
+
+static pthread_mutex_t q_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct msm_pending *q_head;
+static struct msm_pending *q_tail;
+static int q_count;
+
+static K_THREAD_STACK_DEFINE(msm_dispatch_stack, MSM_DISPATCH_STACK_SIZE);
+static struct k_thread msm_dispatch_thread;
 
 static void delivered(void *context, MQTTClient_deliveryToken dt)
 {
-    LOG_DBG("Message with token value %d delivery confirmed", dt);
     delivered_token = dt;
 }
 
 static int msg_clbk(void *context, char *topicName, int topicLen, MQTTClient_message *message)
 {
-    LOG_DBG("topic: %s", topicName);
-    LOG_DBG("message: %.*s", message->payloadlen, (char*)message->payload);
-
     char *trimmed_topic = topicName + base_topic_len;
 
-	sys_snode_t *cur;
-	SYS_SLIST_FOR_EACH_NODE(&topic_list, cur) {
-		struct msm_topic *topic = CONTAINER_OF(cur, struct msm_topic, _node);
+    struct msm_pending *p = malloc(sizeof(*p));
+    if (p == NULL) {
+        goto out;
+    }
+    p->next = NULL;
+    p->payload_len = message->payloadlen;
+    p->payload = malloc(message->payloadlen > 0 ? message->payloadlen : 1);
+    if (p->payload == NULL) {
+        free(p);
+        goto out;
+    }
+    if (message->payloadlen > 0) {
+        memcpy(p->payload, message->payload, message->payloadlen);
+    }
+    size_t tl = strlen(trimmed_topic);
+    if (tl >= sizeof(p->trimmed_topic)) {
+        tl = sizeof(p->trimmed_topic) - 1;
+    }
+    memcpy(p->trimmed_topic, trimmed_topic, tl);
+    p->trimmed_topic[tl] = '\0';
 
-		if (strcmp(trimmed_topic, topic->name) == 0) {
-			topic->clbk((char*)message->payload,  message->payloadlen, topic->user_data);
-		}
-	}
+    pthread_mutex_lock(&q_mutex);
+    if (q_count >= MSM_QUEUE_MAX) {
+        pthread_mutex_unlock(&q_mutex);
+        free(p->payload);
+        free(p);
+        fprintf(stderr, "msm: dispatch queue full, dropping message\n");
+        goto out;
+    }
+    if (q_tail != NULL) {
+        q_tail->next = p;
+    } else {
+        q_head = p;
+    }
+    q_tail = p;
+    q_count++;
+    pthread_mutex_unlock(&q_mutex);
 
+out:
     MQTTClient_freeMessage(&message);
     MQTTClient_free(topicName);
     return 1;
@@ -57,8 +110,48 @@ static int msg_clbk(void *context, char *topicName, int topicLen, MQTTClient_mes
 
 static void conn_lost(void *context, char *cause)
 {
-    LOG_ERR("Connection lost");
-    LOG_ERR(" cause: %s", cause);
+    /* Runs on Paho's host pthread - do not use LOG_*. */
+    fprintf(stderr, "msm: connection lost: %s\n", cause ? cause : "(null)");
+}
+
+static void msm_dispatch_loop(void *a, void *b, void *c)
+{
+    ARG_UNUSED(a);
+    ARG_UNUSED(b);
+    ARG_UNUSED(c);
+
+    while (true) {
+        struct msm_pending *p;
+
+        pthread_mutex_lock(&q_mutex);
+        p = q_head;
+        if (p != NULL) {
+            q_head = p->next;
+            if (q_head == NULL) {
+                q_tail = NULL;
+            }
+            q_count--;
+        }
+        pthread_mutex_unlock(&q_mutex);
+
+        if (p == NULL) {
+            k_msleep(MSM_DISPATCH_POLL_MS);
+            continue;
+        }
+
+        LOG_DBG("topic: %s", p->trimmed_topic);
+        LOG_DBG("message: %.*s", p->payload_len, p->payload);
+
+        sys_snode_t *cur;
+        SYS_SLIST_FOR_EACH_NODE(&topic_list, cur) {
+            struct msm_topic *topic = CONTAINER_OF(cur, struct msm_topic, _node);
+            if (strcmp(p->trimmed_topic, topic->name) == 0) {
+                topic->clbk(p->payload, p->payload_len, topic->user_data);
+            }
+        }
+        free(p->payload);
+        free(p);
+    }
 }
 
 
@@ -102,6 +195,12 @@ int msm_init(void)
 
     snprintf(base_topic, sizeof(base_topic), ROOT_TOPIC"%s/", client_id);
     base_topic_len = strlen(base_topic);
+
+    k_thread_create(&msm_dispatch_thread, msm_dispatch_stack,
+                    K_THREAD_STACK_SIZEOF(msm_dispatch_stack),
+                    msm_dispatch_loop, NULL, NULL, NULL,
+                    MSM_DISPATCH_PRIO, 0, K_NO_WAIT);
+    k_thread_name_set(&msm_dispatch_thread, "msm_dispatch");
 
     MQTTClient_create(&client, ADDRESS, client_id, MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
