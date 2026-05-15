@@ -2,24 +2,17 @@
 #include <zephyr/logging/log.h>
 #include <pokibot/pokuicom.h>
 #include "nav/nav.h"
+#include "pokibot/lib/poktocol.h"
 #include "pokibot/lib/pokutils.h"
 #include "pokibot/poktypes.h"
 #include "pomicontrol/pomicontrol.h"
 #include "pokdefs.h"
 #include "pokarm/pokarm.h"
 #include "control/control.h"
+#include <math.h>
+#include <stdint.h>
 
 LOG_MODULE_REGISTER(main);
-
-#define STRAT_STAND_SCORE_LV1               4
-#define STRAT_STAND_SCORE_LV2               8
-#define STRAT_STAND_SCORE_LV3               16
-#define STRAT_BANNER_SCORE                  20
-#define STRAT_SHOWTIME_GROUPIE_SCORE        5
-#define STRAT_SHOWTIME_SINGER_SCORE         5
-#define STRAT_SHOWTIME_SINGER_ZONE_SCORE    10 // Depends on whant we can do
-#define STRAT_SHOWTIME_EVERYONE_PARTY_SCORE 10
-#define STRAT_END_GAME_IN_BACKSTAGE_SCORE   10
 
 #define STAND_DROP_DISTANCE_FROM_BORDER 0.075f
 
@@ -149,6 +142,12 @@ pos2_t pus_top_r_go_bw_wp3 = {
     .a = 0.0f,
 };
 
+pos2_t pus_top_r_recal = {
+    .x = BOARD_MAX_X - ROBOT_DIST_TO_FLAT_SIZE - 50.0f,
+    .y = 1500.0f,
+    .a = 0.0f,
+};
+
 pos2_t cursor_wp1 = {
     .x = CURSOR_START_X,
     .y = ROBOT_RADIUS + 50.0f,
@@ -230,6 +229,81 @@ uint8_t score = 0;
         return -1;                                                                                 \
     }
 
+enum recal_dir {
+    recal_dir_n,
+    recal_dir_s,
+    recal_dir_e,
+    recal_dir_w,
+};
+
+void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, enum recal_dir dir)
+{
+    const float_t recal_dist = 200.0f; 
+
+    uint32_t nav_events;
+    nav_go_to_direct(convert_pos_for_team(color, recal_start_pos, 0.0f), K_SECONDS(10));
+    nav_wait_events(&nav_events);
+    
+    LOG_INF(LOG_POS_ARGS("start_pos", recal_start_pos));
+
+    pos2_t pos_recal = recal_start_pos;
+    pos2_t pos_expected = recal_start_pos;
+    
+    float rotation_target;
+    switch (dir) {
+        case recal_dir_n:
+            rotation_target = M_PI;
+            pos_recal.y += recal_dist;
+            pos_expected.y = BOARD_MAX_Y - ROBOT_CENTER_TO_RECAL_SIDE;
+            break;
+        case recal_dir_s:
+            rotation_target = 0.0f;
+            pos_recal.y -= recal_dist;
+            pos_expected.y = BOARD_MIN_Y + ROBOT_CENTER_TO_RECAL_SIDE;
+        break;
+        case recal_dir_e:
+            rotation_target = M_PI/2;
+            pos_recal.x += recal_dist;
+            pos_expected.x = BOARD_MAX_X - ROBOT_CENTER_TO_RECAL_SIDE;
+        break;
+        case recal_dir_w:
+            rotation_target = -M_PI/2;
+            pos_recal.x -= recal_dist;
+            pos_expected.x = BOARD_MIN_X + ROBOT_CENTER_TO_RECAL_SIDE;
+            break;
+        default:
+            return;
+    }
+
+    pos_recal.a = rotation_target;
+    pos_expected.a = rotation_target;
+    recal_start_pos.a = rotation_target;
+    nav_go_to_direct(convert_pos_for_team(color, recal_start_pos, 0.0f), K_SECONDS(10));
+    nav_wait_events(&nav_events);
+
+    // LOG_INF("rotation_target %f", (double)rotation_target);
+    // LOG_INF(LOG_POS_ARGS("recal_start_pos", recal_start_pos));
+    // LOG_INF(LOG_POS_ARGS("pos_recal", pos_recal));
+    // LOG_INF(LOG_POS_ARGS("pos_expected", pos_expected));
+
+    pos_recal = convert_pos_for_team(color, pos_recal, 0.0f);
+    pos_expected = convert_pos_for_team(color, pos_expected, 0.0f);
+    recal_start_pos = convert_pos_for_team(color, recal_start_pos, 0.0f);
+
+    // LOG_INF("Back to native color");
+    // LOG_INF(LOG_POS_ARGS("recal_start_pos", recal_start_pos));
+    // LOG_INF(LOG_POS_ARGS("pos_recal", pos_recal));
+    // LOG_INF(LOG_POS_ARGS("pos_expected", pos_expected));
+
+    nav_go_to_direct(pos_recal, K_SECONDS(10));
+    nav_wait_events(&nav_events);
+    nav_set_pos(pos_expected);
+
+    nav_go_to_direct(recal_start_pos, K_SECONDS(10));
+    nav_wait_events(&nav_events);
+}
+
+
 int match(enum pokprotocol_team color)
 {
     uint32_t match_start_time_ms =  k_uptime_get_32();
@@ -257,6 +331,8 @@ int match(enum pokprotocol_team color)
     LOG_INF("Back in start zone");
     nav_go_to_direct(convert_pos_for_team_no_angle(color, pus_top_r_go_bw_wp3, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
+
+    wall_recalibration(color, pus_top_r_recal, recal_dir_e);
 
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -305,10 +381,8 @@ int match(enum pokprotocol_team color)
     return 0;
 }
 
-
 void calibrate(enum pokprotocol_team color)
 {
-    uint32_t nav_events;
     nav_obstacle_detection(false);
     // nav_set_speed(200.0f, NAV_ANGULAR_VMAX_DEFAULT);
 
@@ -316,43 +390,11 @@ void calibrate(enum pokprotocol_team color)
 
     nav_set_pos(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f));
     nav_set_brake(false);
-    
-    /// CALIB Y
-    pos2_t pos_recal_y = convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f);
-    pos2_t pos_recal_y_expected = pos_recal_y;
-    pos_recal_y.y += 200.0f;
-    pos_recal_y_expected.y = BOARD_MAX_Y - ROBOT_CENTER_TO_RECAL_SIDE;
-    nav_go_to_direct(pos_recal_y, K_SECONDS(4));
-    nav_wait_events(&nav_events);
 
-    nav_set_pos(pos_recal_y_expected);
-    // CALIB Y OK
+    k_sleep(K_SECONDS(1));
 
-    // GO TO CENTER
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f), K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    // CALIB X
-    nav_go_to_direct(convert_pos_for_team(color, CONVERT_POINT2_TO_POS2(start_point, 0.0f), M_PI/2), K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    pos2_t pos_recal_x = CONVERT_POINT2_TO_POS2(start_point, 0.0f);
-    pos2_t pos_recal_x_expected = pos_recal_x;
-    pos_recal_x.x += 200.0f;
-    pos_recal_x_expected.x = BOARD_MAX_X - ROBOT_CENTER_TO_RECAL_SIDE;
-
-    pos_recal_x =  convert_pos_for_team(color, pos_recal_x, M_PI/2);
-    pos_recal_x_expected =  convert_pos_for_team(color, pos_recal_x_expected, M_PI/2);
-
-    nav_go_to_direct(pos_recal_x, K_SECONDS(4));
-    nav_wait_events(&nav_events);
-
-    nav_set_pos(pos_recal_x_expected);
-    nav_go_to_direct(convert_pos_for_team(color, CONVERT_POINT2_TO_POS2(start_point, 0.0f), M_PI/2), K_FOREVER);
-    nav_wait_events(&nav_events);
-
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), 0.0f), K_FOREVER);
-    nav_wait_events(&nav_events);
+    wall_recalibration(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), recal_dir_n);
+    wall_recalibration(color, CONVERT_POINT2_TO_POS2(start_point, M_PI), recal_dir_e);
 
     // nav_set_speed(NAV_PLANAR_VMAX_DEFAULT, NAV_ANGULAR_VMAX_DEFAULT);
     nav_obstacle_detection(true);
