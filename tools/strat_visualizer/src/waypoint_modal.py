@@ -1,13 +1,12 @@
 """Floating modals for editing a waypoint's queued actions and configuring
 action parameters. WaypointModal is the top-level panel; ActionConfigModal is
-the per-action sub-panel for picking enum args (e.g. recalibration direction)."""
+the per-action sub-panel — it dispatches by Param subclass (enum → radio
+rows, int → slider)."""
 import pygame as pg
 
-from actions import (
-    action_default_args, action_has_params, action_ids, action_label,
-    action_param_specs, format_action,
-)
+from competitions.base import EnumParam, IntParam
 from constants import SIDEBAR_ACCENT, SIDEBAR_DIM, SIDEBAR_FG
+from panels import Slider
 
 _PANEL_W = 280
 _ROW_H = 24
@@ -16,6 +15,8 @@ _HEADER_H = 28
 _SECTION_H = 20
 _BORDER_RADIUS = 6
 _REMOVE_BTN_W = 28
+_SLIDER_ROW_H = 30
+_SLIDER_PAD_X = 12  # extra horizontal padding so the thumb doesn't kiss the panel edge
 
 
 def _make_font():
@@ -28,9 +29,10 @@ def _make_font():
 class ActionConfigModal:
     """Sub-modal: pick enum values for an action's params, then confirm."""
 
-    def __init__(self, aid, initial_args, anchor_screen_pos, on_confirm, on_cancel):
+    def __init__(self, catalog, aid, initial_args, anchor_screen_pos, on_confirm, on_cancel):
+        self.catalog = catalog
         self.aid = aid
-        self.args = dict(action_default_args(aid))
+        self.args = dict(catalog.default_args(aid))
         self.args.update(initial_args or {})
         self.anchor = anchor_screen_pos
         self.on_confirm = on_confirm
@@ -38,12 +40,31 @@ class ActionConfigModal:
         self._font = _make_font()
         self._rect = pg.Rect(0, 0, _PANEL_W, 0)
         self._row_rects = []
+        # One Slider per IntParam, persisted across draws so drag state holds.
+        self._sliders: dict[str, Slider] = {}
+        for p in self.catalog.params(self.aid):
+            if isinstance(p, IntParam):
+                self._sliders[p.name] = Slider(
+                    p.min_v, p.max_v, int(self.args.get(p.name, p.default())),
+                    step=p.step,
+                )
+
+    def _param_rows(self, p) -> int:
+        if isinstance(p, EnumParam):
+            return len(p.choices)
+        return 0  # slider draws inline below its label
+
+    def _param_block_h(self, p) -> int:
+        if isinstance(p, EnumParam):
+            return _SECTION_H + len(p.choices) * _ROW_H
+        if isinstance(p, IntParam):
+            return _SECTION_H + _SLIDER_ROW_H
+        return _SECTION_H
 
     def _compute_height(self):
-        specs = action_param_specs(self.aid)
         h = _PAD + _HEADER_H
-        for _name, choices in specs:
-            h += _SECTION_H + len(choices) * _ROW_H
+        for p in self.catalog.params(self.aid):
+            h += self._param_block_h(p)
         h += _ROW_H + _PAD  # confirm
         return h
 
@@ -67,31 +88,50 @@ class ActionConfigModal:
         font = self._font
         self._row_rects = []
         cy = y + _PAD
-        header = font.render(action_label(self.aid), True, SIDEBAR_ACCENT)
+        header = font.render(self.catalog.label(self.aid), True, SIDEBAR_ACCENT)
         screen.blit(header, (x + _PAD, cy + (_HEADER_H - header.get_height()) // 2))
         cy += _HEADER_H
 
-        for name, choices in action_param_specs(self.aid):
-            sec = font.render(name, True, SIDEBAR_DIM)
+        for p in self.catalog.params(self.aid):
+            if isinstance(p, IntParam):
+                label = f"{p.name}: {int(self._sliders[p.name].value)}{p.unit}"
+            else:
+                label = p.name
+            sec = font.render(label, True, SIDEBAR_DIM)
             screen.blit(sec, (x + _PAD, cy + (_SECTION_H - sec.get_height()) // 2))
             cy += _SECTION_H
-            for choice in choices:
-                rr = pg.Rect(x, cy, _PANEL_W, _ROW_H)
-                selected = self.args.get(name) == choice
-                if selected:
-                    hl = pg.Surface((_PANEL_W, _ROW_H), pg.SRCALPHA)
-                    hl.fill((*SIDEBAR_ACCENT, 60))
-                    screen.blit(hl, (x, cy))
-                glyph = "●" if selected else "○"
-                lsurf = font.render(f" {glyph}  {choice}", True, SIDEBAR_FG)
-                screen.blit(lsurf, (x + _PAD, cy + (_ROW_H - lsurf.get_height()) // 2))
-                self._row_rects.append(("choice", (name, choice), rr))
-                cy += _ROW_H
+            if isinstance(p, EnumParam):
+                for choice in p.choices:
+                    rr = pg.Rect(x, cy, _PANEL_W, _ROW_H)
+                    selected = self.args.get(p.name) == choice
+                    if selected:
+                        hl = pg.Surface((_PANEL_W, _ROW_H), pg.SRCALPHA)
+                        hl.fill((*SIDEBAR_ACCENT, 60))
+                        screen.blit(hl, (x, cy))
+                    glyph = "●" if selected else "○"
+                    lsurf = font.render(f" {glyph}  {choice}", True, SIDEBAR_FG)
+                    screen.blit(lsurf, (x + _PAD, cy + (_ROW_H - lsurf.get_height()) // 2))
+                    self._row_rects.append(("choice", (p.name, choice), rr))
+                    cy += _ROW_H
+            elif isinstance(p, IntParam):
+                slider = self._sliders[p.name]
+                slider.draw(
+                    screen,
+                    (x + _PAD + _SLIDER_PAD_X,
+                     cy + (_SLIDER_ROW_H - 12) // 2,
+                     _PANEL_W - 2 * (_PAD + _SLIDER_PAD_X), 12),
+                    font,
+                )
+                cy += _SLIDER_ROW_H
 
         rr = pg.Rect(x, cy, _PANEL_W, _ROW_H)
         confirm = font.render(" confirm", True, SIDEBAR_ACCENT)
         screen.blit(confirm, (x + _PAD, cy + (_ROW_H - confirm.get_height()) // 2))
         self._row_rects.append(("confirm", None, rr))
+
+    def _commit_sliders_to_args(self):
+        for name, slider in self._sliders.items():
+            self.args[name] = int(slider.value)
 
     def handle_event(self, event) -> bool:
         if event.type == pg.KEYDOWN:
@@ -99,9 +139,16 @@ class ActionConfigModal:
                 self.on_cancel()
                 return True
             if event.key in (pg.K_RETURN, pg.K_KP_ENTER):
+                self._commit_sliders_to_args()
                 self.on_confirm(dict(self.args))
                 return True
             return False
+        # Sliders need to see MOUSEMOTION / MOUSEBUTTONUP during drag, which
+        # arrive even when the mouse is briefly outside the panel rect.
+        for slider in self._sliders.values():
+            if slider.handle_event(event):
+                self._commit_sliders_to_args()
+                return True
         if event.type == pg.MOUSEBUTTONDOWN:
             if not self._rect.collidepoint(event.pos):
                 self.on_cancel()
@@ -113,6 +160,7 @@ class ActionConfigModal:
                             name, choice = data
                             self.args[name] = choice
                         elif kind == "confirm":
+                            self._commit_sliders_to_args()
                             self.on_confirm(dict(self.args))
             return True
         if event.type in (pg.MOUSEMOTION, pg.MOUSEBUTTONUP):
@@ -122,13 +170,15 @@ class ActionConfigModal:
 
 class WaypointModal:
     def __init__(self, planner, wp_index, anchor_screen_pos, on_close,
-                 on_insert_before=None, on_insert_after=None):
+                 on_insert_before=None, on_insert_after=None, on_goto=None):
         self.planner = planner
+        self.catalog = planner.catalog
         self.wp_index = wp_index
         self.anchor = anchor_screen_pos
         self.on_close = on_close
         self.on_insert_before = on_insert_before or (lambda idx: None)
         self.on_insert_after = on_insert_after or (lambda idx: None)
+        self.on_goto = on_goto or (lambda idx: None)
         self._font = _make_font()
 
         queued = self.planner.get_actions(self.wp_index)
@@ -146,7 +196,7 @@ class WaypointModal:
     def _total_rows(self):
         queued = self._queued()
         n_queued = max(1, len(queued))
-        return 1 + n_queued + len(action_ids()) + 3
+        return 1 + n_queued + len(self.catalog.ids()) + 4
 
     def _clamp_cursor(self):
         total = self._total_rows()
@@ -157,8 +207,8 @@ class WaypointModal:
         n_queued = max(1, len(queued))
         h = _PAD + _HEADER_H + _ROW_H  # label row
         h += _SECTION_H + n_queued * _ROW_H
-        h += _SECTION_H + len(action_ids()) * _ROW_H
-        h += _SECTION_H + 3 * _ROW_H + _PAD
+        h += _SECTION_H + len(self.catalog.ids()) * _ROW_H
+        h += _SECTION_H + 4 * _ROW_H + _PAD
         return h
 
     def _compute_pos(self, screen_size):
@@ -221,7 +271,7 @@ class WaypointModal:
                     hl = pg.Surface((_PANEL_W, _ROW_H), pg.SRCALPHA)
                     hl.fill((*SIDEBAR_ACCENT, 50))
                     screen.blit(hl, (x, cy))
-                label_surf = font.render(format_action(aid, args), True, SIDEBAR_FG)
+                label_surf = font.render(self.catalog.format(aid, args), True, SIDEBAR_FG)
                 screen.blit(label_surf, (x + _PAD, cy + (_ROW_H - label_surf.get_height()) // 2))
                 x_btn = font.render("[×]", True, SIDEBAR_DIM)
                 screen.blit(x_btn, (rm_rect.right - _PAD - x_btn.get_width(),
@@ -239,14 +289,14 @@ class WaypointModal:
         sec2 = font.render("Add action", True, SIDEBAR_DIM)
         screen.blit(sec2, (x + _PAD, cy + (_SECTION_H - sec2.get_height()) // 2))
         cy += _SECTION_H
-        for aid in action_ids():
+        for aid in self.catalog.ids():
             rr = pg.Rect(x, cy, _PANEL_W, _ROW_H)
             if self._cursor == cursor_row:
                 hl = pg.Surface((_PANEL_W, _ROW_H), pg.SRCALPHA)
                 hl.fill((*SIDEBAR_ACCENT, 50))
                 screen.blit(hl, (x, cy))
-            suffix = " …" if action_has_params(aid) else ""
-            lsurf = font.render(action_label(aid) + suffix, True, SIDEBAR_FG)
+            suffix = " …" if self.catalog.has_params(aid) else ""
+            lsurf = font.render(self.catalog.label(aid) + suffix, True, SIDEBAR_FG)
             screen.blit(lsurf, (x + _PAD, cy + (_ROW_H - lsurf.get_height()) // 2))
             self._row_rects.append(("add", aid, rr, None))
             cursor_row += 1
@@ -256,6 +306,7 @@ class WaypointModal:
         screen.blit(sec3, (x + _PAD, cy + (_SECTION_H - sec3.get_height()) // 2))
         cy += _SECTION_H
         wp_actions = [
+            ("wp_goto", "go to this waypoint"),
             ("wp_insert_after", "insert waypoint after"),
             ("wp_insert_before", "insert waypoint before"),
             ("wp_delete", "delete waypoint"),
@@ -281,7 +332,7 @@ class WaypointModal:
         if qi >= len(queued):
             return
         aid, args = queued[qi]
-        if not action_has_params(aid):
+        if not self.catalog.has_params(aid):
             return
 
         def on_confirm(new_args):
@@ -295,7 +346,7 @@ class WaypointModal:
         def on_cancel():
             self._sub_modal = None
 
-        self._sub_modal = ActionConfigModal(aid, args, self.anchor, on_confirm, on_cancel)
+        self._sub_modal = ActionConfigModal(self.catalog, aid, args, self.anchor, on_confirm, on_cancel)
 
     def _open_config_for_add(self, aid):
         def on_confirm(new_args):
@@ -307,7 +358,7 @@ class WaypointModal:
         def on_cancel():
             self._sub_modal = None
 
-        self._sub_modal = ActionConfigModal(aid, {}, self.anchor, on_confirm, on_cancel)
+        self._sub_modal = ActionConfigModal(self.catalog, aid, {}, self.anchor, on_confirm, on_cancel)
 
     def _remove_queued(self, qi):
         acts = self.planner.get_actions(self.wp_index)
@@ -337,7 +388,7 @@ class WaypointModal:
 
     def _append_default(self, aid):
         acts = self.planner.get_actions(self.wp_index)
-        acts.append((aid, action_default_args(aid)))
+        acts.append((aid, self.catalog.default_args(aid)))
         self.planner.set_actions(self.wp_index, acts)
 
     def _begin_label_edit(self):
@@ -358,10 +409,13 @@ class WaypointModal:
         if kind == "queued":
             self._open_config_for_queued(data)
         elif kind == "add":
-            if action_has_params(data):
+            if self.catalog.has_params(data):
                 self._open_config_for_add(data)
             else:
                 self._append_default(data)
+        elif kind == "wp_goto":
+            self.on_goto(self.wp_index)
+            self.close()
         elif kind == "wp_insert_after":
             self.on_insert_after(self.wp_index)
             self.close()

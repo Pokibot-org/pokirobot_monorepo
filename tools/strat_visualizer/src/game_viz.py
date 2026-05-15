@@ -20,26 +20,41 @@ def load_image(name):
 
 class GameZoneVisualizer:
     ROBOT_IMG_MM_PER_PX = 1.0  # source assets: 1 pixel = 1 mm
+    # Cap the source bg surface so the per-frame fit-scale is cheap. The
+    # final blit is bounded by the screen (~2k wide tops), so a 4k source
+    # is already 2× supersampled — anything beyond that is wasted work
+    # (and decompressed RAM). The 2026 raw asset is 10630×7087.
+    MAX_BG_SRC_WIDTH_PX = 4000
 
-    def __init__(self, world: World, screen):
+    def __init__(self, world: World, screen, competition):
         self.world = world
         self.screen = screen
+        self.competition = competition
         self.right_margin_ratio = RIGHT_MARGIN_RATIO
 
-        self.real_size = [3000, 2000]
-        self.mins = [-1500, 0]
-        self.maxs = [1500, 2000]
+        w, h = competition.table_size_mm
+        x0, y0 = competition.table_mins
+        self.real_size = [w, h]
+        self.mins = [x0, y0]
+        self.maxs = [x0 + w, y0 + h]
         self.dim_x = [0, 1]
         self.dim_y = [0, 1]
         self.rl_to_px_ratio = 1000
         self.display_wps = True
-        self.bg = load_image("vinyle.png")
+        raw_bg = pg.image.load(competition.bg_image_path).convert()
+        if raw_bg.get_width() > self.MAX_BG_SRC_WIDTH_PX:
+            new_w = self.MAX_BG_SRC_WIDTH_PX
+            new_h = max(1, int(round(raw_bg.get_height() * new_w / raw_bg.get_width())))
+            self.bg = pg.transform.smoothscale(raw_bg, (new_w, new_h))
+        else:
+            self.bg = raw_bg
         self.bg_ratio = self.bg.get_width() / self.bg.get_height()
+        self._bg_scaled = None  # (w, h, Surface) — cached fit-scale, invalidated on size change
         # Robot art — index by team (0=blue, 1=yellow). Source assets face +Y
         # (up) in the image, so we apply a -90° offset when rotating.
         self._robot_imgs = {
-            0: pg.image.load(os.path.join(_main_dir, "../img", "robot_blue.png")).convert_alpha(),
-            1: pg.image.load(os.path.join(_main_dir, "../img", "robot_yellow.png")).convert_alpha(),
+            team: pg.image.load(path).convert_alpha()
+            for team, path in competition.robot_images.items()
         }
         self._robot_scaled = {}  # (team, ratio) -> scaled Surface
 
@@ -131,7 +146,10 @@ class GameZoneVisualizer:
         desired_h = desired_w / self.bg_ratio
         margin_w = (vp_w - desired_w) / 2
         margin_h = (vp_h - desired_h) / 2
-        background = pg.transform.smoothscale(self.bg, (desired_w, desired_h))
+        target_size = (int(desired_w), int(desired_h))
+        if self._bg_scaled is None or self._bg_scaled[0] != target_size:
+            self._bg_scaled = (target_size, pg.transform.smoothscale(self.bg, target_size))
+        background = self._bg_scaled[1]
         board_x = vp_x + margin_w
         board_y = vp_y + margin_h
         self.dim_x = [board_x, board_x + background.get_width()]

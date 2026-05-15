@@ -16,7 +16,6 @@ from mqtt_sim import PoklegscomSim, PokirobotSim, pokirobot_builder
 from panels import (
     InputsPanel, KeybindingsPanel, PlanPanel, Sidebar, SidePanel, SnapPanel,
 )
-from actions import normalize_actions_list
 from path_planner import PathPlanner
 from path_simulator import PathSimulator
 from preview import PreviewScreen
@@ -33,8 +32,9 @@ class PokibotGameVisualizer:
 
     SIM_DT = 1.0 / 60.0
 
-    def __init__(self, world: World, on_pause_changed=None):
+    def __init__(self, world: World, competition, on_pause_changed=None):
         self.world = world
+        self.competition = competition
         self.on_pause_changed = on_pause_changed or (lambda paused: None)
         # populated by run() / _build_ui()
         self.screen = None
@@ -110,6 +110,7 @@ class PokibotGameVisualizer:
             on_close=lambda: setattr(self, "_wp_modal", None),
             on_insert_before=lambda idx: self._insert_relative(idx, before=True),
             on_insert_after=lambda idx: self._insert_relative(idx, before=False),
+            on_goto=lambda idx: self.simulator.goto_index(idx),
         )
 
     def _toggle_side(self, new_side):
@@ -136,6 +137,7 @@ class PokibotGameVisualizer:
         b.bind(pg.K_c, lambda: self._open_preview(p.to_c_string()), doc="open code preview")
         b.bind(pg.K_SPACE, lambda: self.plan_panel._play_pause(), doc="sim play/pause")
         b.bind(pg.K_n, lambda: self.plan_panel._step_one(), doc="sim step one waypoint")
+        b.bind(pg.K_b, lambda: self.plan_panel._step_prev(), doc="sim step previous waypoint")
         b.bind(pg.K_ESCAPE, lambda: self.plan_panel._reset_sim(), doc="sim reset")
         b.bind(pg.K_g, lambda: setattr(p, "grid_enabled", not p.grid_enabled), doc="toggle grid snap")
         b.bind(pg.K_t, lambda: setattr(p, "angle_enabled", not p.angle_enabled), doc="toggle angle snap")
@@ -195,7 +197,7 @@ class PokibotGameVisualizer:
 
     def _build_ui(self):
         self.bindings = KeyBindings()
-        self.planner = PathPlanner()
+        self.planner = PathPlanner(catalog=self.competition.actions)
         self.simulator = PathSimulator(
             self.world, self.planner,
             on_user_running=lambda running: self.on_pause_changed(not running),
@@ -213,8 +215,8 @@ class PokibotGameVisualizer:
         self._load_state()
 
     def _load_state(self):
-        self._state_path = os.path.join(_main_dir, "..", "state.json")
-        loaded = state_load(self._state_path)
+        self._state_dir = os.path.abspath(os.path.join(_main_dir, ".."))
+        loaded = state_load(self._state_dir, self.competition.id)
         if loaded is not None:
             self.planner.side = loaded.get("side", "blue")
             wps = []
@@ -222,7 +224,7 @@ class PokibotGameVisualizer:
                 if len(w) == 3:
                     wps.append((w[0], w[1], w[2], []))
                 elif len(w) == 4:
-                    wps.append((w[0], w[1], w[2], normalize_actions_list(w[3])))
+                    wps.append((w[0], w[1], w[2], self.planner.catalog.normalize_list(w[3])))
             self.planner.waypoints = wps
             raw_labels = loaded.get("labels", []) or []
             self.planner.labels = [
@@ -234,7 +236,7 @@ class PokibotGameVisualizer:
     def _autosave_state(self):
         fp = (self.planner.side, tuple(self.planner.waypoints), tuple(self.planner.labels))
         if fp != self._last_state_fp:
-            state_save(self._state_path, self.planner.side,
+            state_save(self._state_dir, self.competition.id, self.planner.side,
                        self.planner.waypoints, self.planner.labels)
             self._last_state_fp = fp
 
@@ -375,7 +377,7 @@ class PokibotGameVisualizer:
         pg.init()
         self.clock = pg.time.Clock()
         self.screen = pg.display.set_mode((1280, 720), pg.RESIZABLE)
-        self.game_viz = GameZoneVisualizer(self.world, self.screen)
+        self.game_viz = GameZoneVisualizer(self.world, self.screen, self.competition)
         self._build_ui()
         self._loop()
         pg.quit()
@@ -405,11 +407,14 @@ class PokibotGameSimulator:
     PokirobotSim per connected device, and hands the visualizer a hook so
     play/pause toggles motor_break across every PoklegscomSim."""
 
-    def __init__(self):
+    def __init__(self, competition):
+        self.competition = competition
         self.msms = MqttSimMessengerServer(self.on_device_connection, self.on_device_disconnection)
         self.world = World()
         self.pokirobot_sim_nodes: dict[str, PokirobotSim] = {}
-        self.visualizer = PokibotGameVisualizer(self.world, on_pause_changed=self._set_mqtt_paused)
+        self.visualizer = PokibotGameVisualizer(
+            self.world, competition, on_pause_changed=self._set_mqtt_paused,
+        )
         self.last_robot_team = 0
 
     def _set_mqtt_paused(self, paused: bool):
@@ -428,7 +433,15 @@ class PokibotGameSimulator:
     def on_device_connection(self, dev_name, dev_id):
         if dev_id in self.pokirobot_sim_nodes:
             return
-        robot, pokirobot = pokirobot_builder(dev_id, self.msms, self.world, self.last_robot_team)
+        team = self.last_robot_team
+        side = "yellow" if team else "blue"
+        poses = self.competition.start_positions.get(side) or [(0.0, 1000.0, 0.0)]
+        idx = sum(1 for r in self.world.robots.values() if (r.team and team) or (not r.team and not team))
+        start_pos = poses[idx] if idx < len(poses) else poses[0]
+        robot, pokirobot = pokirobot_builder(
+            dev_id, self.msms, self.world, team=team,
+            radius_mm=self.competition.robot_radius_mm, start_pos=start_pos,
+        )
         self.last_robot_team = (self.last_robot_team + 1) % 2
         self.world.robots["pokirobot_" + dev_id] = robot
         self.pokirobot_sim_nodes[dev_id] = pokirobot

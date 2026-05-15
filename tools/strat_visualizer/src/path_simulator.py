@@ -1,10 +1,14 @@
-"""PathSimulator — local preview that drives a Robot through waypoints with
-obstacle avoidance. Used by the play/pause/reset buttons in PlanPanel."""
+"""PathSimulator — local preview that drives a Robot through the planner's
+waypoints with obstacle avoidance.
+
+The simulator reads `self.planner.waypoints` live every step, so edits made
+while the robot is following the path (moving a waypoint, deleting one,
+inserting one) are picked up immediately. `wp_index` is the cursor — the
+index of the next waypoint to reach."""
 import math
 
 import numpy as np
 
-from actions import format_action
 from world import Robot, World
 
 
@@ -15,8 +19,6 @@ class PathSimulator:
         self.world = world
         self.planner = planner
         self.robot = Robot(team=0)
-        self.wps = []
-        self.wp_actions = []
         self.wp_index = 0
         self.started = False
         self.running = False
@@ -31,36 +33,58 @@ class PathSimulator:
         self._action_elapsed = 0.0
         self._step_mode = False
 
+    # ---- planner reads -----------------------------------------------------
+
+    def _wps(self):
+        return self.planner.waypoints if self.planner is not None else []
+
+    def _wp_pose(self, i):
+        x, y, a, _acts = self._wps()[i]
+        return np.array([x, y, a], dtype=float)
+
+    def _wp_actions(self, i):
+        return list(self._wps()[i][3])
+
     def _sync_team(self):
         if self.planner is not None:
             self.robot.team = 1 if self.planner.side == "yellow" else 0
 
-    def _load(self, waypoints):
-        if not waypoints:
+    def _publish_remaining(self):
+        wps = self._wps()
+        self.robot.wps = [self._wp_pose(i) for i in range(self.wp_index, len(wps))]
+
+    # ---- lifecycle ---------------------------------------------------------
+
+    def _start_from(self, start_index: int) -> bool:
+        wps = self._wps()
+        if not wps:
             return False
         self._sync_team()
-        self.wps = [np.array([x, y, a], dtype=float) for (x, y, a, _acts) in waypoints]
-        self.wp_actions = [list(acts) for (_x, _y, _a, acts) in waypoints]
-        first = self.wps[0]
-        self.robot.pos = np.array([first[0], first[1], first[2]], dtype=float)
-        self.robot.dir = first[2]
-        self.robot.wps = self.wps[:]
-        self.wp_index = 1 if len(self.wps) > 1 else len(self.wps)
+        start_index = max(0, min(start_index, len(wps) - 1))
+        first = self._wp_pose(start_index)
+        self.robot.pos = first.copy()
+        self.robot.dir = float(first[2])
+        self.wp_index = start_index + 1
+        self._publish_remaining()
+        self._action_queue = []
+        self._action_elapsed = 0.0
+        self.current_action = None
         self.world.robots[self.PREVIEW_KEY] = self.robot
         self.started = True
         return True
 
-    def play_pause(self, waypoints):
-        if not self.started or self.wp_index >= len(self.wps):
-            if not self._load(waypoints):
+    def play_pause(self, waypoints=None):
+        wps = self._wps()
+        if not self.started or self.wp_index >= len(wps):
+            if not self._start_from(0):
                 return
-            self.running = self.wp_index < len(self.wps)
+            self.running = self.wp_index < len(wps)
         else:
             self.running = not self.running
         self._on_user_paused(self.running)
 
-    def reset(self, waypoints):
-        self._load(waypoints)
+    def reset(self, waypoints=None):
+        self._start_from(0)
         self.running = False
         self._step_mode = False
         # Reset returns to the pre-start state so paths/waypoints render opaque.
@@ -74,16 +98,53 @@ class PathSimulator:
         self.world.robots.pop(self.PREVIEW_KEY, None)
         self._on_user_paused(False)
 
-    def step_one(self, waypoints):
+    def step_one(self, waypoints=None):
         """Run until the next waypoint's actions complete, then pause."""
-        if not self.started or self.wp_index >= len(self.wps):
-            if not self._load(waypoints):
+        wps = self._wps()
+        if not self.started or self.wp_index >= len(wps):
+            if not self._start_from(0):
                 return
-        if self.wp_index >= len(self.wps):
+        if self.wp_index >= len(wps):
             return
         self._step_mode = True
         self.running = True
         self._on_user_paused(True)
+
+    def goto_index(self, i: int):
+        """Snap the robot to waypoint `i`'s pose and pause. Used by the
+        right-click 'go to this waypoint' option and by step_prev."""
+        wps = self._wps()
+        if not wps:
+            return
+        i = max(0, min(i, len(wps) - 1))
+        self._start_from(i)
+        self.running = False
+        self._step_mode = False
+        self._on_user_paused(False)
+
+    def step_prev(self):
+        """Snap to the previous waypoint. If the robot was heading from wp[i-1]
+        to wp[i], this puts it back at wp[i-2] (or wp[0] at the start)."""
+        wps = self._wps()
+        if not wps:
+            return
+        # wp_index is the next target; the wp the robot most recently "arrived"
+        # at is wp_index - 1. Going backward one step lands on wp_index - 2.
+        prev = max(0, self.wp_index - 2)
+        self.goto_index(prev)
+
+    def step_next(self):
+        """Snap to the next waypoint, skipping its actions. Symmetric to
+        step_prev. The motion-based forward step is still available via
+        `step_one`."""
+        wps = self._wps()
+        if not wps:
+            return
+        # current arrived = wp_index - 1; next = wp_index.
+        nxt = min(len(wps) - 1, self.wp_index)
+        self.goto_index(nxt)
+
+    # ---- per-frame ---------------------------------------------------------
 
     def _avoidance_velocity(self, desired_dir, dist_to_target):
         """Potential-field steering. desired_dir is a unit vector toward the target."""
@@ -119,12 +180,18 @@ class PathSimulator:
 
     def step(self, dt):
         self._sync_team()
+        wps = self._wps()
+        # Clamp wp_index if the user deleted waypoints out from under us.
+        if self.wp_index > len(wps):
+            self.wp_index = len(wps)
+        self._publish_remaining()
+
         if self.current_action is not None:
             self._action_elapsed += dt
             if self._action_elapsed >= self.action_duration:
                 if self._action_queue:
                     aid, args = self._action_queue.pop(0)
-                    self.current_action = format_action(aid, args)
+                    self.current_action = self.planner.catalog.format(aid, args)
                     self._action_elapsed = 0.0
                 else:
                     self.current_action = None
@@ -134,10 +201,10 @@ class PathSimulator:
                         self._step_mode = False
                         self._on_user_paused(False)
             return
-        if not self.running or self.wp_index >= len(self.wps):
+        if not self.running or self.wp_index >= len(wps):
             self.running = False
             return
-        target = self.wps[self.wp_index]
+        target = self._wp_pose(self.wp_index)
         delta = target - self.robot.pos
         delta_xy = delta[:2]
         delta_a = (float(delta[2]) + math.pi) % (2 * math.pi) - math.pi
@@ -159,18 +226,18 @@ class PathSimulator:
         # progressively toward the waypoint angle via step_a above.
         self.robot.dir = float(self.robot.pos[2])
         if dist < self.pos_tol and abs(delta_a) < self.ang_tol:
-            arrived_actions = list(self.wp_actions[self.wp_index])
+            arrived_actions = self._wp_actions(self.wp_index)
             self.wp_index += 1
-            self.robot.wps = self.wps[self.wp_index:]
+            self._publish_remaining()
             if arrived_actions:
                 self._action_queue = arrived_actions[1:]
                 aid, args = arrived_actions[0]
-                self.current_action = format_action(aid, args)
+                self.current_action = self.planner.catalog.format(aid, args)
                 self._action_elapsed = 0.0
             elif self._step_mode:
                 self.running = False
                 self._step_mode = False
                 self._on_user_paused(False)
-            if self.wp_index >= len(self.wps):
+            if self.wp_index >= len(wps):
                 self.running = False
                 self._step_mode = False

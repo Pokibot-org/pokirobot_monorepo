@@ -8,14 +8,14 @@ import math
 
 import pygame as pg
 
-from actions import format_action
 from constants import COLOR_WP, COLOR_WP_HALO, COLOR_WP_PENDING, SIDEBAR_ACCENT, SIDEBAR_DIM, SIDEBAR_FG
 
 
 class PathPlanner:
     HIT_RADIUS_MM = 80.0
 
-    def __init__(self):
+    def __init__(self, catalog):
+        self.catalog = catalog
         self.waypoints = []  # list of (x, y, angle, [action_id, ...])
         self.labels = []     # parallel list of free-form per-waypoint notes
         self.side = "blue"
@@ -264,11 +264,7 @@ class PathPlanner:
                 f"nav_wait_events(&nav_events); // step {i}"
             )
             for aid, args in acts:
-                if args:
-                    arg_str = " ".join(f"{k}={v}" for k, v in args.items())
-                    lines.append(f"// action: {aid} {arg_str}")
-                else:
-                    lines.append(f"// action: {aid}")
+                lines.append(self.catalog.to_c(aid, args, wp=(x, y, a)))
         return "\n".join(lines) + "\n"
 
     def export(self, path):
@@ -410,9 +406,9 @@ class PathPlanner:
         lines.append(f"a={a:.3f} rad ({a_deg:.1f}°)")
         if acts:
             if len(acts) <= 3:
-                labels = ", ".join(format_action(aid, args) for (aid, args) in acts)
+                labels = ", ".join(self.catalog.format(aid, args) for (aid, args) in acts)
             else:
-                labels = ", ".join(format_action(aid, args) for (aid, args) in acts[:2])
+                labels = ", ".join(self.catalog.format(aid, args) for (aid, args) in acts[:2])
                 labels += f", +{len(acts) - 2} more"
             lines.append(f"actions: {labels}")
         if len(self._hover_indices) > 1:

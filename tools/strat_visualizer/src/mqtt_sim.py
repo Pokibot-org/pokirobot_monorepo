@@ -234,8 +234,11 @@ class PokirobotSim(SimPart):
         self.start()
 
 
-def pokirobot_builder(id: str, msms: MqttSimMessengerServer, world: World, team=0) -> tuple[Robot, PokirobotSim]:
-    robot = Robot(team=team)
+def pokirobot_builder(id: str, msms: MqttSimMessengerServer, world: World, team=0,
+                       radius_mm: float = 180.0, start_pos=(0.0, 1000.0, 0.0)) -> tuple[Robot, PokirobotSim]:
+    robot = Robot(radius=radius_mm, team=team)
+    robot.pos = np.array([start_pos[0], start_pos[1], start_pos[2]], dtype=float)
+    robot.dir = float(start_pos[2])
     pokirobot_msm = MqttSimMessengerNode(msms, id, "pokirobot")
     return robot, PokirobotSim([
         PokuicomSim(pokirobot_msm, robot),
