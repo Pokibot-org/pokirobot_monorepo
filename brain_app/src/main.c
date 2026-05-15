@@ -84,7 +84,7 @@ const point2_t start_point = {
     .y = 1775.0f,
 };
 
-#define BOARD_END_POS_X (BOARD_MIN_X + 2825.0f)
+#define BOARD_END_POS_X (BOARD_MIN_X + 2800.0f)
 
 const pos2_t end_pos = {
     .x = BOARD_END_POS_X,
