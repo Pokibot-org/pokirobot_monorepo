@@ -190,7 +190,7 @@ struct pos2 convert_pos_for_team(enum pokprotocol_team color, struct pos2 pos, f
     }
 
     pos.x = -pos.x;
-    pos.a = -(pos.a + M_PI) + offset;
+    pos.a = -pos.a + offset;
     return pos;
 }
 
