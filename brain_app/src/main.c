@@ -346,8 +346,6 @@ int match(enum pokprotocol_team color)
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
-    wall_recalibration(color, corridor_bottom_wp, M_PI, recal_dir_s);
-
     LOG_INF("CURSOR");
     nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp1, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
