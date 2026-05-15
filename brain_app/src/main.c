@@ -108,7 +108,7 @@ pos2_t zone_exit_wp = {
 };
 
 pos2_t zone_enter_wp = {
-    .x = BOARD_END_POS_X - 50.0f,
+    .x = BOARD_END_POS_X,
     .y = 1200.0f,
     .a = 0.0f,
 };
