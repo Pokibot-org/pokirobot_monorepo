@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(control);
 
 #define PLANAR_VMAX_DEFAULT                 400.0f // 700 mm/s
 #define PLANAR_FACTOR(_planar_vmax)         (0.06f * (_planar_vmax))
-#define PLANAR_RAMP(_planar_vmax)           (2.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
+#define PLANAR_RAMP(_planar_vmax)           (4.0f * (_planar_vmax) * CONTROL_PERIOD_MS / 1000.0f) // X seconds to reach vmax
 
 #define ANGULAR_VMAX_DEFAULT                  (0.7f * M_PI) // 0.5 rotation/s
 #define ANGULAR_FACTOR(_angular_vmax)         (1.0f * (_angular_vmax))
@@ -469,16 +469,23 @@ void _test_square(struct control *control_obj) {
     LOG_INF("_test_square");
     control_start(control_obj);
 
+    float dist = 500.0f;
     pos2_t pos[] = {
-        (pos2_t){.x = 1000.0f, .y=0.0f, .a = 0.0f},
-        (pos2_t){.x = 1000.0f, .y=1000.0f, .a = 0.0f},
-        (pos2_t){.x = 0.0f, .y=1000.0f, .a = 0.0f},
+        (pos2_t){.x = dist, .y=0.0f, .a = 0.0f},
+        (pos2_t){.x = dist, .y=dist, .a = 0.0f},
+        (pos2_t){.x = 0.0f, .y=dist, .a = 0.0f},
         (pos2_t){.x = 0.0f, .y=0.0f, .a = 0.0f},
     };
     pos2_t start_pos = {.x = 0.0f, .y=0.0f, .a = 0.0f};
     control_set_pos(control_obj, start_pos, false);
     control_set_brake(control_obj, false);
-    control_set_waypoints(control_obj, pos, ARRAY_SIZE(pos));
+    float vmax = 100.0f;
+    while (1) {
+        control_set_planar_vmax(control_obj, vmax);
+        vmax = 1.5f * vmax;
+        control_set_waypoints(control_obj, pos, ARRAY_SIZE(pos));
+        control_task_wait_target(control_obj, 10.0f, DEG_TO_RAD(2.0f), 100000.0f, 10.0f);
+    }
 }
 
 void _test_calibration_distance(struct control *obj)
@@ -493,7 +500,7 @@ void _test_calibration_distance(struct control *obj)
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,
             (double)obj->waypoints.wps[0].y, (double)obj->waypoints.wps[0].a);
     k_sleep(K_MSEC(1000));
-    target = (pos2_t){0.0f, 3000.0f, 0.0f * M_PI};
+    target = (pos2_t){0.0f, 800.0f, 0.0f * M_PI};
     control_set_waypoints(obj, &target, 1);
     LOG_DBG("pos: %.2f %.2f %.2f", (double)obj->pos.x, (double)obj->pos.y, (double)obj->pos.a);
     LOG_DBG("target: %.2f %.2f %.2f", (double)obj->waypoints.wps[0].x,

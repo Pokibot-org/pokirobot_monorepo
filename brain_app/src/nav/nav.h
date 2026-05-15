@@ -44,6 +44,7 @@ int nav_go_to(const pos2_t pos, k_timeout_t timeout);
 int nav_go_to_direct(const pos2_t pos, k_timeout_t timeout);
 int nav_move_relative(const pos2_t pos, k_timeout_t timeout);
 int nav_set_speed(float planar_vmax, float angular_vmax);
+int nav_set_sensivity(const pos2_t *sensivity);
 void nav_cancel(void);
 void nav_wait_events(uint32_t *events);
 void nav_clear_obstacles(void);

@@ -83,11 +83,13 @@ static int current_astar_grid = 0;
 static char in_use_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 static char static_astar_grid[GRID_SIZE_Y * GRID_SIZE_X];
 
-static const pos2_t sensivity = {
+static const pos2_t default_sensivity = {
     .x = 10.0f,
     .y = 10.0f,
     .a = DEG_TO_RAD(2.0f),
 };
+
+static pos2_t current_sensivity = default_sensivity;
 
 static void astar_mark_grid(char *grid, int x, int y, char value)
 {
@@ -308,7 +310,7 @@ static void check_target_reached_work_handler(struct k_work *work)
     pos2_t current_pos;
     control_get_pos(&control_obj, &current_pos);
     pos2_t diff = pos2_abs(pos2_diff(current_pos, target_pos));
-    if (POS2_COMPARE(diff, <, sensivity)) {
+    if (POS2_COMPARE(diff, <, current_sensivity)) {
         LOG_INF("Target reached");
         had_a_target_pos = false;
         k_event_set(&nav_events, NAV_EVENT_DESTINATION_REACHED);
@@ -520,6 +522,16 @@ int nav_set_speed(float planar_vmax, float angular_vmax)
     return 0;
 }
 
+int nav_set_sensivity(const pos2_t *sensivity)
+{
+    if (sensivity) {
+        current_sensivity = *sensivity;
+    } else {
+        current_sensivity = default_sensivity;
+    }
+    return 0;
+}
+
 void nav_obstacle_detection(bool state)
 {
     if (state) {
@@ -534,6 +546,7 @@ int nav_init(void)
     // lidar_start(lidar_dev);
     // _test_calibration_distance(&control_obj);
     // _test_calibration_angle(&control_obj);
+    // _test_square(&control_obj);
     // return 0;
     control_start(&control_obj);
 

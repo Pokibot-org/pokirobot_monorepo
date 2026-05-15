@@ -74,7 +74,7 @@ const struct nav_obstacle end_zone = start_zone;
 
 const point2_t start_point = {
     .x = BOARD_MIN_X + 2700.0f,
-    .y = 1775.0f,
+    .y = BOARD_MAX_Y - ROBOT_CENTER_TO_RECAL_SIDE,
 };
 
 #define BOARD_END_POS_X (BOARD_MIN_X + 2800.0f)
@@ -148,6 +148,18 @@ pos2_t pus_top_r_recal = {
     .a = 0.0f,
 };
 
+pos2_t pus_mid_wp1 = {
+    .x = BOARD_MIN_X + 2500.0f,
+    .y = 800.0f,
+    .a = 0.0f,
+};
+
+pos2_t pus_mid_wp2 = {
+    .x = BOARD_MIN_X + 1800.0f,
+    .y = 800.0f,
+    .a = 0.0f,
+};
+
 pos2_t cursor_wp1 = {
     .x = CURSOR_START_X,
     .y = ROBOT_RADIUS + 50.0f,
@@ -156,13 +168,13 @@ pos2_t cursor_wp1 = {
 
 pos2_t cursor_wp2 = {
     .x = CURSOR_START_X,
-    .y = ROBOT_RADIUS + 10.0f,
+    .y = ROBOT_RADIUS + 30.0f,
     .a = 0.0f,
 };
 
 pos2_t cursor_wp3 = {
     .x = CURSOR_END_X,
-    .y = ROBOT_RADIUS + 10.0f,
+    .y = ROBOT_RADIUS + 30.0f,
     .a = 0.0f,
 };
 
@@ -238,6 +250,7 @@ enum recal_dir {
 
 void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, float offset, enum recal_dir dir)
 {
+    return;
     const float_t recal_dist = 200.0f; 
 
     uint32_t nav_events;
@@ -246,18 +259,23 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
     nav_go_to_direct(start_calib_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);
 
-    nav_set_speed(200.0f, ANGULAR_VMAX_DEFAULT);    
-
+    nav_set_speed(200.0f, ANGULAR_VMAX_DEFAULT);  
+    pos2_t sensivity = {
+        .x = 1.0f,
+        .y = 1.0f,
+        .a = DEG_TO_RAD(0.5f),
+    };
+    nav_set_sensivity(&sensivity);
     LOG_INF(LOG_POS_ARGS("start_pos", recal_start_pos));
-
+    
     pos2_t pos_recal = recal_start_pos;
     pos2_t pos_expected = recal_start_pos;
     
     float rotation_target;
     switch (dir) {
         case recal_dir_n:
-            rotation_target = M_PI/2;
-            pos_recal.y += recal_dist;
+        rotation_target = M_PI/2;
+        pos_recal.y += recal_dist;
             pos_expected.y = BOARD_MAX_Y - ROBOT_CENTER_TO_RECAL_SIDE;
             break;
         case recal_dir_s:
@@ -269,8 +287,8 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
             rotation_target = 0.0f;
             pos_recal.x += recal_dist;
             pos_expected.x = BOARD_MAX_X - ROBOT_CENTER_TO_RECAL_SIDE;
-        break;
-        case recal_dir_w:
+            break;
+            case recal_dir_w:
             rotation_target = M_PI;
             pos_recal.x -= recal_dist;
             pos_expected.x = BOARD_MIN_X + ROBOT_CENTER_TO_RECAL_SIDE;
@@ -289,7 +307,7 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
     LOG_INF(LOG_POS_ARGS("recal_start_pos", recal_start_pos));
     LOG_INF(LOG_POS_ARGS("pos_recal", pos_recal));
     LOG_INF(LOG_POS_ARGS("pos_expected", pos_expected));
-
+    
     pos_recal = convert_pos_for_team(color, pos_recal, ROBOT_CALIB_SIDE_OFFSET);
     pos_expected = convert_pos_for_team(color, pos_expected, ROBOT_CALIB_SIDE_OFFSET);
     recal_start_pos = convert_pos_for_team(color, recal_start_pos, ROBOT_CALIB_SIDE_OFFSET);
@@ -298,15 +316,17 @@ void wall_recalibration(enum pokprotocol_team color, pos2_t recal_start_pos, flo
     LOG_INF(LOG_POS_ARGS("recal_start_pos", recal_start_pos));
     LOG_INF(LOG_POS_ARGS("pos_recal", pos_recal));
     LOG_INF(LOG_POS_ARGS("pos_expected", pos_expected));
-
+    
     nav_go_to_direct(pos_recal, K_SECONDS(10));
     nav_wait_events(&nav_events);
     nav_set_pos(pos_expected);
-
+    
     nav_go_to_direct(recal_start_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);
-
+    
     nav_set_speed(PLANAR_VMAX_DEFAULT, ANGULAR_VMAX_DEFAULT);
+    
+    nav_set_sensivity(NULL);
 
     nav_go_to_direct(start_calib_pos, K_SECONDS(10));
     nav_wait_events(&nav_events);
@@ -347,8 +367,18 @@ int match(enum pokprotocol_team color)
     nav_wait_events(&nav_events);
     LOG_INF("Left start zone");
 
-    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, M_PI), K_FOREVER);
+    LOG_INF("Push 2");
+    nav_go_to_direct(convert_pos_for_team(color, pus_mid_wp1, -M_PI/2.0f), K_SECONDS(5));
     nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team(color, pus_mid_wp2, -M_PI/2.0f), K_SECONDS(5));
+    nav_wait_events(&nav_events);
+    nav_go_to_direct(convert_pos_for_team(color, pus_mid_wp1, -M_PI/2.0f), K_SECONDS(5));
+    nav_wait_events(&nav_events);
+
+    nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_bottom_wp, 0.0f), K_FOREVER);
+    nav_wait_events(&nav_events);
+
+    wall_recalibration(color, corridor_bottom_wp, 0.0f, recal_dir_s);
 
     LOG_INF("CURSOR");
     nav_go_to_direct(convert_pos_for_team_no_angle(color, cursor_wp1, M_PI), K_FOREVER);
@@ -370,6 +400,7 @@ int match(enum pokprotocol_team color)
     nav_go_to_direct(convert_pos_for_team_no_angle(color, corridor_top_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
 
+    wall_recalibration(color, zone_enter_wp, M_PI, recal_dir_e);
 
     nav_go_to_direct(convert_pos_for_team_no_angle(color, zone_enter_wp, M_PI), K_FOREVER);
     nav_wait_events(&nav_events);
@@ -445,9 +476,9 @@ int main(void)
     pokuicom_send_score(score);
     LOG_INF("Init of all the actuators: OK");
 
-    LOG_INF("Calibration");
-    calibrate(color);
-    LOG_INF("Calibration: OK");
+    // LOG_INF("Calibration");
+    // calibrate(color);
+    // LOG_INF("Calibration: OK");
 
     while (pokuicom_get_tirette_status() != POKTOCOL_TIRETTE_STATUS_UNPLUGGED) {
         pokuicom_request(POKTOCOL_DATA_TYPE_UI_TIRETTE_STATUS);

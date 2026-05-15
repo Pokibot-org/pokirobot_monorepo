@@ -15,16 +15,16 @@ rebuild: # rebuild target
 	west build -b interco_weact_h743 . --pristine --build-dir ../build
 
 build-pc-app: # build strat pc app
-	west build -b native_sim/native/64 . --build-dir ../build
+	west build -b native_sim/native/64 . --build-dir ../build_pc_app
 
 build-pc-app-debug: # build strat pc app
-	west build -b native_sim/native/64 . --build-dir ../build -- -DOVERLAY_CONFIG="debug.conf"
+	west build -b native_sim/native/64 . --build-dir ../build_pc_app -- -DOVERLAY_CONFIG="debug.conf"
 
 rebuild-pc-app: # build strat pc app
-	west build -b native_sim/native/64 . --pristine --build-dir ../build
+	west build -b native_sim/native/64 . --pristine --build-dir ../build_pc_app
 
 run-pc-app: # run strat pc app
-	../build/zephyr/zephyr.exe
+	../build_pc_app/zephyr/zephyr.exe
 
 run-pc-gui: # run start pc ui
 	python ../tools/strat_visualizer/src/main.py
