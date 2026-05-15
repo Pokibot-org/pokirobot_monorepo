@@ -68,9 +68,16 @@ class SimPart:
 
 
 class PokuicomSim(SimPart):
+    # Number of "PLUGGED" responses to send before auto-pulling the tirette.
+    # Brain has two sequential polling loops (wait PLUGGED, then wait UNPLUGGED).
+    # If we flip 2 -> 3 on the very first request, a slow RX schedule on the
+    # brain side can collapse both responses and the first loop never sees "2".
+    TIRETTE_PLUGGED_HOLD = 10
+
     def __init__(self, msm: MqttSimMessengerNode, robot: Robot) -> None:
         super().__init__()
         self.robot = robot
+        self._tirette_plugged_sends = 0
         self.pokuicom = MqttSimMessengerNodeWithClbk(msm, 0, "pokuicom", self.process_pokuicom)
         self.pokuicom.subscribe("request")
         self.pokuicom.subscribe("score")
@@ -86,8 +93,10 @@ class PokuicomSim(SimPart):
                         parent.send("team", f"{self.robot.team}")
                     case 2:
                         parent.send("match", f"{self.robot.tirette}")
-                        if self.robot.tirette != 3:
-                            self.robot.tirette = 3
+                        if self.robot.tirette == 2:
+                            self._tirette_plugged_sends += 1
+                            if self._tirette_plugged_sends >= self.TIRETTE_PLUGGED_HOLD:
+                                self.robot.tirette = 3
             case "score":
                 logger.info(f'New score: {payload["value"]}')
 
